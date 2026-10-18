@@ -1,0 +1,9 @@
+name = "garage-photos"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[[kv_namespaces]]
+binding = "PHOTOS"
+id = "aebfca396b184b28a1d1fa1626bdc257"
+
+# Set the upload key once with:  npx wrangler secret put UPLOAD_KEY
