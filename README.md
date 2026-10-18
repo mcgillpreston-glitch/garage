@@ -16,3 +16,4 @@ Live: https://mcgillpreston-glitch.github.io/garage/
 Data is stored on each device (localStorage + IndexedDB for photos). Use Export/Import to move it between phones.
 
 `HANDOVER.md` is the original build brief.
+
