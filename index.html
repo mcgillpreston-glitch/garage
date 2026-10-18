@@ -1,0 +1,1335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Garage Stock</title>
+<meta name="description" content="Garage and tool inventory: live barcode scanning, QR labels for bins, loan tracking and a shopping list for supplies.">
+<meta name="theme-color" content="#eceef0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121417" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Garage Stock">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-column phone app. Sticky header, filter chips, item rows like a parts bin, fixed bottom tabs. Feel: steel shelving, oxide-red paint, hazard-yellow labels. */
+:root{
+  --bg:#eceef0; --surface:#ffffff; --sunk:#dfe3e7; --line:#c9cfd6;
+  --ink:#181c21; --muted:#5a636e;
+  --accent:#a63d1c; --accent-ink:#ffffff; --accent-soft:#f3ddd3;
+  --ok:#2e7a4c; --ok-soft:#d8eedf; --loan:#2f5f9e; --loan-soft:#dce6f5;
+  --warn:#9a5d00; --warn-soft:#f8e8c8; --bad:#b3332a; --bad-soft:#f6dad6;
+  --tag:#f2c230; --tag-ink:#2a2100;
+  --display:"Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body:"Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121417; --surface:#1b1f24; --sunk:#232930; --line:#323a43;
+  --ink:#e6e9ed; --muted:#97a1ac;
+  --accent:#ec7f57; --accent-ink:#2a0d02; --accent-soft:#3b2219;
+  --ok:#6cc58f; --ok-soft:#1b3326; --loan:#86aef0; --loan-soft:#1d2a40;
+  --warn:#f0b04e; --warn-soft:#3a2b12; --bad:#f2847a; --bad-soft:#3d1d1a;
+  --tag:#e3b628; --tag-ink:#231b00; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121417; --surface:#1b1f24; --sunk:#232930; --line:#323a43;
+  --ink:#e6e9ed; --muted:#97a1ac;
+  --accent:#ec7f57; --accent-ink:#2a0d02; --accent-soft:#3b2219;
+  --ok:#6cc58f; --ok-soft:#1b3326; --loan:#86aef0; --loan-soft:#1d2a40;
+  --warn:#f0b04e; --warn-soft:#3a2b12; --bad:#f2847a; --bad-soft:#3d1d1a;
+  --tag:#e3b628; --tag-ink:#231b00; color-scheme:dark}
+
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);color-scheme:light}
+html,body{min-height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+img{max-width:100%}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:680px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 calc(96px + env(safe-area-inset-bottom,0px))}
+
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:.02em;margin:0;line-height:.95;text-transform:uppercase}
+h1 .stripe{display:inline-block;width:22px;height:14px;margin-right:8px;vertical-align:2px;background:repeating-linear-gradient(-45deg,var(--tag) 0 4px,var(--ink) 4px 8px);border-radius:2px}
+h1 small{display:block;font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.06em;color:var(--muted);text-transform:none;margin-top:5px}
+h2{font-family:var(--display);font-weight:700;font-size:22px;margin:6px 0 4px;line-height:1.1;text-wrap:balance}
+h3{font-family:var(--display);font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:18px 0 4px}
+.lede{color:var(--muted);margin:0 0 14px;max-width:62ch}
+.iconbtn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
+
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 14px}
+.summary button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:9px 8px 8px;text-align:left;min-width:0}
+.summary b{display:block;font-family:var(--display);font-weight:800;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.summary span{display:block;font-size:12px;color:var(--muted);line-height:1.2;margin-top:3px}
+.summary .t-out b{color:var(--loan)} .summary .t-attn b{color:var(--bad)} .summary .t-low b{color:var(--warn)}
+.summary button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+
+.search{display:flex;gap:8px;margin-bottom:10px}
+input[type=text],input[type=number],input[type=search],input[type=date],input[type=url],input[type=password],select,textarea{width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px}
+textarea{min-height:64px;resize:vertical}
+.chips{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin:0 0 8px;padding-bottom:4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:transparent;border-radius:99px;padding:5px 12px;font-size:13px;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chips.cats .chip{font-size:12px;padding:4px 10px}
+.answer{font-size:13px;color:var(--muted);margin:2px 0 8px}
+.answer b{color:var(--ink)}
+
+.shelf{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.item{display:grid;grid-template-columns:44px 1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
+.item .main{min-width:0;border:0;background:none;padding:0;text-align:left}
+.thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;background:var(--sunk);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden}
+.name{font-weight:600;overflow-wrap:anywhere;line-height:1.25}
+.meta{font-size:12px;color:var(--muted);display:flex;gap:2px 8px;flex-wrap:wrap;margin-top:2px}
+.meta span{min-width:0;overflow-wrap:anywhere}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.02em}
+.right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+.pill.available{background:var(--ok-soft);color:var(--ok)}
+.pill.loaned,.pill.away{background:var(--loan-soft);color:var(--loan)}
+.pill.repair,.pill.low{background:var(--warn-soft);color:var(--warn)}
+.pill.missing,.pill.overdue{background:var(--bad-soft);color:var(--bad)}
+.pill.ex{background:var(--sunk);color:var(--muted)}
+.qtyx{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.qty{display:flex;align-items:center;gap:4px}
+.qty .amt{min-width:46px;text-align:center;font-family:var(--display);font-weight:700;font-size:18px;font-variant-numeric:tabular-nums;line-height:1}
+.qty .amt small{display:block;font-family:var(--body);font-weight:400;font-size:11px;color:var(--muted)}
+.qty .amt.low{color:var(--warn)}
+.step{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-size:18px;line-height:1;display:grid;place-items:center}
+.link{border:0;background:none;padding:0;color:var(--accent);font-weight:600;font-size:13px}
+
+.empty{padding:26px 2px;color:var(--muted)}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:600;background:var(--accent);color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.ghost{background:var(--sunk);color:var(--ink)}
+.btn.danger{background:var(--bad-soft);color:var(--bad)}
+.btn.sm{padding:7px 12px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row.end{justify-content:flex-end}
+.row.between{justify-content:space-between}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.tag{display:inline-block;background:var(--tag);color:var(--tag-ink);font-family:var(--mono);font-size:12px;font-weight:500;padding:2px 8px;border-radius:3px;letter-spacing:.04em}
+.status{font-size:13px;color:var(--muted);min-height:1.4em;margin-bottom:8px}
+.hint{font-size:12px;color:var(--muted)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form .full{grid-column:1/-1}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:9px;font-weight:600;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+.viewer{position:relative;width:100%;max-width:100%;aspect-ratio:4/3;background:#0b0d0f;border-radius:var(--r);overflow:hidden;margin-bottom:12px;display:grid;place-items:center}
+.viewer video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0}
+.viewer .aim{position:absolute;left:12%;right:12%;top:30%;bottom:30%;border:2px solid var(--tag);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.35);opacity:0}
+.viewer.live video,.viewer.live .aim{opacity:1}
+.viewer #camBtn{position:relative;z-index:2}
+.viewer.live #camBtn{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff}
+.viewer .camnote{position:absolute;top:12px;left:12px;right:12px;text-align:center;color:#c9d0d6;font-size:13px}
+.viewer.live .camnote{display:none}
+.camtools{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:2}
+.viewer:not(.live) .camtools{display:none}
+.camtool{border:0;border-radius:99px;padding:7px 14px;background:rgba(0,0,0,.6);color:#fff;font-size:13px;font-weight:600}
+.camtool[aria-pressed="true"]{background:var(--tag);color:var(--tag-ink)}
+
+.ihead{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;margin-bottom:10px}
+.ihead img,.ihead .thumb{width:84px;height:84px;border-radius:10px;object-fit:cover}
+.ihead .main{min-width:0}
+.facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:6px 0 14px;font-size:14px}
+.facts dt{color:var(--muted);font-size:12px;padding-top:2px}
+.facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.actions .full{grid-column:1/-1}
+.minor{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:14px}
+
+.loc{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);width:100%;border-left:0;border-right:0;border-top:0;background:none;text-align:left}
+.loc .count{font-family:var(--display);font-weight:700;font-size:20px;font-variant-numeric:tabular-nums}
+.loc .count small{font-family:var(--body);font-weight:400;font-size:12px;color:var(--muted);margin-left:3px}
+
+.out{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.out .main{min-width:0;border:0;background:none;padding:0;text-align:left}
+
+.store{font-family:var(--display);font-weight:700;text-transform:uppercase;letter-spacing:.07em;font-size:14px;color:var(--muted);margin:16px 0 2px}
+.li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.li .main{min-width:0}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--accent);margin:0}
+.checks{display:flex;flex-direction:column}
+.checks label{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(6px,env(safe-area-inset-left,0px));padding-right:max(6px,env(safe-area-inset-right,0px))}
+nav.tabs .in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs button{border:0;background:none;padding:9px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--muted);position:relative}
+nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
+.badge{position:absolute;top:4px;left:calc(50% + 6px);background:var(--accent);color:var(--accent-ink);font-size:10px;font-weight:700;border-radius:99px;padding:0 5px;min-width:16px;text-align:center}
+
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet .card{background:var(--bg);width:100%;max-width:680px;max-height:92%;overflow:auto;border-radius:16px 16px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:14px;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.sheet .card{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+
+/* Printable labels */
+#printArea{display:none}
+@media print{
+  @page{size:letter;margin:0}
+  html,body{background:#fff!important;color:#000}
+  :root{padding:0}
+  body::before{display:none}
+  body > *:not(#printArea){display:none!important}
+  #printArea{display:block}
+}
+.lblpage{width:8.5in;height:11in;display:grid;overflow:hidden;break-after:page;page-break-after:always;background:#fff;color:#000}
+.lbl{display:flex;align-items:center;gap:.08in;padding:.05in .1in;overflow:hidden;font-family:var(--body);color:#000}
+.lbl.bordered{border:1px dashed #999;border-radius:.08in}
+.lbl svg{flex:none}
+.lbl .t{min-width:0;display:flex;flex-direction:column;line-height:1.1}
+.lbl b{font-family:var(--display);font-weight:700;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.lbl .c{font-family:var(--mono)}
+.lbl small{color:#444;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <h1><span class="stripe" aria-hidden="true"></span>Garage Stock<small>Saved on this device</small></h1>
+    <button class="iconbtn" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </header>
+
+  <!-- GARAGE -->
+  <section id="v-garage">
+    <div class="summary">
+      <button data-f="all"><b id="n-all">0</b><span>items</span></button>
+      <button data-f="out" class="t-out"><b id="n-out">0</b><span>out</span></button>
+      <button data-f="attn" class="t-attn"><b id="n-attn">0</b><span>repair or missing</span></button>
+      <button data-f="low" class="t-low"><b id="n-low">0</b><span>supplies low</span></button>
+    </div>
+    <div class="search">
+      <input type="search" id="q" placeholder="Do I have a… (10mm socket, jigsaw blades)" aria-label="Search the garage">
+      <button class="btn" id="addBtn" aria-label="Add item">Add</button>
+    </div>
+    <div class="chips" id="depts"></div>
+    <div class="chips cats" id="cats" hidden></div>
+    <div class="answer" id="answer"></div>
+    <div class="shelf" id="shelf"></div>
+    <p class="row" id="exampleNote" hidden style="margin-top:14px"><span class="hint">Items and places tagged Example are samples.</span><button class="link" id="clearEx">Remove examples</button></p>
+  </section>
+
+  <!-- SCAN -->
+  <section id="v-scan" hidden>
+    <h2>Scan</h2>
+    <p class="lede">Scan a tool's barcode or one of your Garage Stock labels. Things you already have open right away. New barcodes are looked up online.</p>
+    <div class="viewer" id="viewer">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="aim" aria-hidden="true"></div>
+      <div class="camtools"><button class="camtool" id="torchBtn" aria-pressed="false" hidden>Light</button><button class="camtool" id="zoomBtn" hidden>1×</button></div>
+      <span class="camnote">Your browser will ask to use the camera</span>
+      <button class="btn" id="camBtn">Start camera</button>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <input type="text" id="manualCode" placeholder="Or type a barcode or GS- code" aria-label="Barcode or label code" style="flex:1">
+      <button class="btn ghost" id="manualGo">Look up</button>
+    </div>
+    <div class="row" style="margin-bottom:14px">
+      <label class="btn ghost sm" for="idFile">Identify from photo</label>
+      <input type="file" id="idFile" accept="image/*" capture="environment" hidden>
+      <label class="link" for="scanFile" style="cursor:pointer">Read a barcode from a photo</label>
+      <input type="file" id="scanFile" accept="image/*" hidden>
+    </div>
+    <div class="status" id="scanStatus"></div>
+    <div id="scanResult"></div>
+  </section>
+
+  <!-- PLACES -->
+  <section id="v-places" hidden>
+    <h2>Places</h2>
+    <p class="lede">Walls, shelves, bins and drawers. Print a QR label for each one, then scan a label to see what's inside.</p>
+    <div class="row" style="margin-bottom:10px"><button class="btn" id="addLoc">Add place</button><button class="btn ghost" id="printLabels">Print labels</button></div>
+    <div id="locList"></div>
+  </section>
+
+  <!-- OUT -->
+  <section id="v-out" hidden>
+    <h2>Out of the garage</h2>
+    <p class="lede">Tools on loan, away from home, waiting on a repair, or missing. Overdue loans come first.</p>
+    <div id="outList"></div>
+  </section>
+
+  <!-- LIST -->
+  <section id="v-list" hidden>
+    <h2>Shopping list</h2>
+    <p class="lede">Supplies at or below their low level, plus missing tools to replace. Tick a line once bought: supplies are restocked and tools go back to available.</p>
+    <div class="row" style="margin-bottom:6px">
+      <input type="text" id="extraName" placeholder="Add something else (e.g. 3-inch deck screws)" aria-label="Extra list item" style="flex:1">
+      <button class="btn ghost" id="extraAdd">Add</button>
+    </div>
+    <div id="list"></div>
+  </section>
+</div>
+
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <button data-tab="garage" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7M7 15.5h10M7 18h10"/></svg>Garage</button>
+  <button data-tab="scan"><svg viewBox="0 0 24 24"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 8v8M11 8v8M13.5 8v8M16 8v8"/></svg>Scan</button>
+  <button data-tab="places"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h16M4 15h16M12 10v10"/></svg>Places</button>
+  <button data-tab="out"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>Out<span class="badge" id="outBadge" hidden>0</span></button>
+  <button data-tab="list"><svg viewBox="0 0 24 24"><path d="M5 7h1M5 12h1M5 17h1M9 7h10M9 12h10M9 17h10"/></svg>List<span class="badge" id="listBadge" hidden>0</span></button>
+</div></nav>
+
+<div class="sheet" id="sheet" hidden><div class="card" id="sheetCard" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<div id="printArea"></div>
+<datalist id="platformList"></datalist>
+<datalist id="borrowerList"></datalist>
+
+<script>
+/* ---------- categories (modeled on home-improvement store aisles) ---------- */
+/* Each department has a default kind. A ":s" suffix marks a supply category, ":t" a tool category. */
+const RAW_TAX = [
+  ["Power Tools","tool",["Drills & Drivers","Impact Drivers","Impact Wrenches","Hammer Drills & Rotary Hammers","Circular Saws","Miter Saws","Table Saws","Jigsaws","Reciprocating Saws","Band Saws","Oscillating Multi-Tools","Rotary Tools","Angle Grinders","Sanders","Routers","Planers","Nailers & Staplers","Heat Guns","Glue Guns","Power Tool Combo Kits","Batteries & Chargers"]],
+  ["Hand Tools","tool",["Wrenches","Sockets & Socket Sets","Ratchets","Screwdrivers & Nut Drivers","Hex Keys & Torx","Pliers & Wire Cutters","Hammers & Mallets","Pry Bars","Clamps","Vises","Utility Knives","Chisels","Files & Rasps","Hand Saws","Hand Tool Sets"]],
+  ["Measuring & Layout Tools","tool",["Tape Measures","Levels","Laser Levels & Measures","Squares","Stud Finders","Chalk Lines","Calipers"]],
+  ["Tool Storage","tool",["Tool Chests & Cabinets","Tool Boxes & Bags","Workbenches","Sawhorses","Pegboard & Wall Storage"]],
+  ["Air Compressors & Air Tools","tool",["Air Compressors","Air Tools","Air Hoses & Fittings","Tire Inflators"]],
+  ["Welding & Soldering","tool",["Welders","Torches","Soldering Irons","Welding Supplies:s"]],
+  ["Outdoor Power Equipment","tool",["Lawn Mowers","String Trimmers","Leaf Blowers","Hedge Trimmers","Chainsaws","Pressure Washers","Snow Blowers","Generators"]],
+  ["Lawn & Garden","tool",["Shovels & Spades","Rakes","Hoes & Cultivators","Pruners & Loppers","Wheelbarrows","Hoses & Nozzles","Sprayers","Fertilizer:s","Grass Seed:s","Mulch & Soil:s","Weed Control:s"]],
+  ["Automotive","tool",["Jacks & Stands","Creepers","Battery Chargers & Jump Starters","OBD Scanners","Torque Wrenches","Motor Oil:s","Fluids:s","Filters:s","Wiper Blades:s","Car Care:s"]],
+  ["Ladders","tool",["Step Ladders","Extension Ladders","Multi-Position Ladders","Step Stools"]],
+  ["Shop Vacuums & Cleaning","tool",["Wet/Dry Vacs","Vac Filters & Bags:s","Brooms & Brushes","Cleaners & Degreasers:s"]],
+  ["Electrical","tool",["Extension Cords & Power Strips","Work Lights & Flashlights","Multimeters & Testers","Wire Strippers & Crimpers","Wire & Connectors:s","Electrical Tape:s"]],
+  ["Plumbing","tool",["Pipe Wrenches","Plungers & Augers","Tubing Cutters","Fittings:s","Thread Tape & Sealants:s"]],
+  ["Paint","tool",["Brushes","Rollers & Frames","Paint Sprayers","Drop Cloths","Painter's Tape:s","Paint & Primer:s","Stain:s","Caulk:s","Spackle & Patch:s"]],
+  ["Hardware & Fasteners","supply",["Screws","Nails","Bolts, Nuts & Washers","Anchors","Hooks & Hangers","Hinges & Brackets","Zip Ties","Rope & Chain"]],
+  ["Tool Accessories","supply",["Drill Bits","Driver Bits","Saw Blades","Sanding Discs & Sandpaper","Grinding & Cutoff Wheels","Router Bits","Oscillating Blades"]],
+  ["Adhesives & Sealants","supply",["Wood Glue","Construction Adhesive","Epoxy","Super Glue","Silicone","Duct & Specialty Tape"]],
+  ["Lubricants & Chemicals","supply",["Penetrating Oil","Grease","2-Stroke & Bar Oil","Fuel Stabilizer","Propane"]],
+  ["Safety & Workwear","tool",["Safety Glasses","Hearing Protection","Respirators & Masks","Respirator Filters:s","Work Gloves","Knee Pads","First Aid:s","Fire Extinguishers"]],
+  ["Sports, Bikes & Recreation","tool",["Bikes","Camping","Coolers","Sports Equipment"]],
+  ["Holiday & Seasonal","tool",["Holiday Decor","Holiday Lights","Storage Bins"]],
+  ["Other","tool",["Other","Other Supplies:s"]]
+];
+const TAX = RAW_TAX.map(([d, k, cats]) => ({ d, cats: cats.map(c => { const m = c.match(/^(.*):(s|t)$/); return { name: m ? m[1] : c, kind: m ? (m[2] === "s" ? "supply" : "tool") : k }; }) }));
+const DEPTS = TAX.map(t => t.d);
+const catsOf = d => (TAX.find(t => t.d === d) || { cats: [] }).cats;
+const kindOf = (d, c) => (catsOf(d).find(x => x.name === c) || {}).kind || "tool";
+const validCat = (d, c) => catsOf(d).some(x => x.name === c);
+const TAX_LINES = TAX.flatMap(t => t.cats.map(c => `${t.d} > ${c.name}`)).join("\n");
+
+const STATUS = {
+  available: "Available", loaned: "Loaned out", away: "Away", repair: "Needs repair", missing: "Missing"
+};
+const POWER = { cordless:"Cordless", corded:"Corded", gas:"Gas", pneumatic:"Air", manual:"Manual" };
+const UNITS = ["count","box","pack","bag","bottle","can","tube","roll","sheet","ft","lb","oz","gal","qt"];
+const STEP_UNITS = new Set(["count","box","pack","bag","bottle","can","tube","roll","sheet"]);
+const DEFAULT_PLATFORMS = ["Milwaukee M18","Milwaukee M12","DeWalt 20V MAX","DeWalt FLEXVOLT","Makita 18V LXT","Ryobi ONE+","Ryobi 40V","Ridgid 18V","Bosch 18V","Craftsman V20","Kobalt 24V","Hart 20V","Ego 56V","Greenworks 40V"];
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+const money = n => (n == null || n === "" || isNaN(n)) ? "" : "$" + Number(n).toFixed(2);
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const fmtDate = iso => { if (!iso) return ""; const d = new Date(iso + "T12:00:00"); if (isNaN(d)) return iso; return d.toLocaleDateString(undefined, { month:"short", day:"numeric", year: iso.slice(0,4) !== today().slice(0,4) ? "numeric" : undefined }); };
+const daysSince = iso => Math.round((new Date(today() + "T12:00:00") - new Date(iso + "T12:00:00")) / 864e5);
+const newId = p => p + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const initials = s => String(s || "?").split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+
+/* ---------- state & storage ---------- */
+const LS = "garagestock.v1", CFG_KEY = "garagestock.cfg";
+const S = { items:{}, locs:{}, extras:{}, seq:{ it:0, loc:0 }, tab:"garage", q:"", dept:"All", cat:"All", f:"all" };
+let CFG = {}; try { CFG = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch(e){}
+function saveCfg(){ try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch(e){} }
+function saveAll(){
+  try { localStorage.setItem(LS, JSON.stringify({ items:S.items, locs:S.locs, extras:S.extras, seq:S.seq })); }
+  catch(e){ toast("Couldn't save. This browser's storage may be full or blocked."); }
+}
+function loadAll(){
+  try {
+    const raw = localStorage.getItem(LS);
+    if (raw) { const d = JSON.parse(raw); Object.assign(S, { items:d.items || {}, locs:d.locs || {}, extras:d.extras || {}, seq:d.seq || { it:0, loc:0 } }); return; }
+  } catch(e){}
+  seedExamples();
+}
+function nextCode(type){
+  S.seq[type] = (S.seq[type] || 0) + 1;
+  return `GS-${type === "it" ? "IT" : "LOC"}-${String(S.seq[type]).padStart(4, "0")}`;
+}
+function putItem(it){ it.updated = Date.now(); S.items[it.id] = it; saveAll(); renderAll(); }
+function dropItem(id){ delete S.items[id]; photoDel(id); saveAll(); renderAll(); }
+function putLoc(l){ S.locs[l.id] = l; saveAll(); renderAll(); }
+
+function seedExamples(){
+  const wall = { id:"loc_ex_wall", name:"Pegboard wall", area:"North wall", code:nextCode("loc"), order:1, example:true };
+  const bin = { id:"loc_ex_bin4", name:"Bin 4 · Fasteners", area:"Shelf B", code:nextCode("loc"), order:2, example:true };
+  S.locs = { [wall.id]:wall, [bin.id]:bin };
+  const t = today();
+  const ex = [
+    { kind:"tool", name:"M18 1/2\" Drill/Driver", department:"Power Tools", category:"Drills & Drivers", brand:"Milwaukee", model:"2801-20", platform:"Milwaukee M18", power:"cordless", qty:1, status:"available", locationId:wall.id, purchase:{ price:99, date:"2025-05-10", store:"Home Depot" } },
+    { kind:"tool", name:"M18 REDLITHIUM 5.0Ah battery", department:"Power Tools", category:"Batteries & Chargers", brand:"Milwaukee", model:"48-11-1850", platform:"Milwaukee M18", power:"cordless", qty:2, status:"available", locationId:wall.id },
+    { kind:"tool", name:"25 ft tape measure", department:"Measuring & Layout Tools", category:"Tape Measures", brand:"Stanley", power:"manual", qty:1, status:"loaned", locationId:wall.id, loan:{ to:"Mike (neighbor)", since:addDays(t,-12), due:addDays(t,-2) } },
+    { kind:"tool", name:"7-1/4\" circular saw", department:"Power Tools", category:"Circular Saws", brand:"Skil", power:"corded", qty:1, status:"repair", locationId:wall.id, notes:"Blade guard sticks" },
+    { kind:"tool", name:"3/8\" drive socket set, SAE + metric", department:"Hand Tools", category:"Sockets & Socket Sets", brand:"Husky", power:"manual", qty:1, status:"available", locationId:bin.id },
+    { kind:"supply", name:"#8 × 1-1/4\" wood screws", department:"Hardware & Fasteners", category:"Screws", unit:"count", amount:40, threshold:50, restock:500, price:9.98, store:"Lowe's", locationId:bin.id },
+    { kind:"supply", name:"2-stroke engine oil, 2.6 oz", department:"Lubricants & Chemicals", category:"2-Stroke & Bar Oil", unit:"bottle", amount:3, threshold:1, restock:6, price:3.49, store:"Home Depot", locationId:bin.id }
+  ];
+  S.items = {};
+  ex.forEach(e => { const id = newId("it"); S.items[id] = { ...e, id, code:nextCode("it"), example:true, updated:Date.now() }; });
+  saveAll();
+}
+
+/* ---------- photos (IndexedDB, so localStorage stays small) ---------- */
+let idbP = null;
+function idb(){
+  return idbP ||= new Promise((res, rej) => { const r = indexedDB.open("garagestock", 1); r.onupgradeneeded = () => r.result.createObjectStore("photos"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+}
+async function photoOp(mode, fn){
+  const db = await idb();
+  return new Promise((res, rej) => { const tx = db.transaction("photos", mode); const req = fn(tx.objectStore("photos")); tx.oncomplete = () => res(req ? req.result : undefined); tx.onerror = () => rej(tx.error); });
+}
+const photoCache = new Map();
+async function photoGet(id){ if (photoCache.has(id)) return photoCache.get(id); try { const v = await photoOp("readonly", st => st.get(id)); if (v) photoCache.set(id, v); return v || null; } catch(e){ return null; } }
+async function photoPut(id, v){ photoCache.set(id, v); try { await photoOp("readwrite", st => st.put(v, id)); } catch(e){ toast("Couldn't save the photo on this device."); } }
+async function photoDel(id){ photoCache.delete(id); try { await photoOp("readwrite", st => st.delete(id)); } catch(e){} }
+async function photoAll(){
+  const out = {};
+  try { const db = await idb(); await new Promise(res => { const c = db.transaction("photos").objectStore("photos").openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { out[cur.key] = cur.value; cur.continue(); } else res(); }; c.onerror = res; }); } catch(e){}
+  return out;
+}
+async function makeThumb(blob, max = 480){
+  const bmp = await createImageBitmap(blob);
+  const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.8);
+}
+function fillPhotos(root){
+  (root || document).querySelectorAll("img[data-photo]:not([src])").forEach(async img => { const v = await photoGet(img.dataset.photo); if (v) img.src = v; });
+}
+const thumbHTML = (it, cls = "thumb") => it.hasPhoto ? `<img class="${cls}" data-photo="${esc(it.id)}" alt="">` : `<span class="${cls}" aria-hidden="true">${esc(initials(it.category || it.name))}</span>`;
+
+/* ---------- item logic ---------- */
+const isTool = it => it.kind === "tool";
+const isLow = it => !isTool(it) && num(it.amount) <= num(it.threshold);
+const isOut = it => isTool(it) && (it.status === "loaned" || it.status === "away");
+const isAttn = it => isTool(it) && (it.status === "repair" || it.status === "missing");
+const isOverdue = it => it.status === "loaned" && it.loan && it.loan.due && it.loan.due < today();
+const needsBuying = it => isLow(it) || (isTool(it) && (it.status === "missing" || it.replace));
+const locName = id => (S.locs[id] || {}).name || "";
+const amtText = it => ({ big: String(+num(it.amount).toFixed(2)), small: it.unit === "count" ? "left" : it.unit });
+
+const stem = w => { w = w.toLowerCase().replace(/[^a-z0-9]/g, ""); if (/ies$/.test(w)) return w.slice(0, -3) + "y"; if (/sses$/.test(w)) return w.slice(0, -2); if (/ss$/.test(w)) return w; return w.replace(/s$/, "").replace(/e$/, ""); };
+const STOP = new Set(["and","the","with","for","tool","set","kit","inch","pack","piece","pc","new"]);
+const words = s => String(s || "").split(/[^A-Za-z0-9]+/).map(stem).filter(w => w.length > 2 && !STOP.has(w));
+function guessCategory(text){
+  const tw = new Set(words(text));
+  let best = null, bs = 0;
+  for (const t of TAX) for (const c of t.cats) {
+    const cw = words(c.name); if (!cw.length) continue;
+    let s = cw.filter(w => tw.has(w)).length; if (!s) continue;
+    s += cw.filter(w => tw.has(w)).length / cw.length * 0.5;
+    if (s > bs) { bs = s; best = { department:t.d, category:c.name, kind:c.kind }; }
+  }
+  return best;
+}
+function searchText(it){ return [it.name, it.brand, it.model, it.code, it.barcode, it.category, it.department, locName(it.locationId), it.platform, it.notes, it.serial, it.loan && it.loan.to].join(" ").toLowerCase(); }
+function matches(it, q){
+  if (!q) return true;
+  const hay = searchText(it), hayW = new Set(words(hay));
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every(t => hay.includes(t) || hayW.has(stem(t)));
+}
+
+/* ---------- render ---------- */
+function renderAll(){
+  renderGarage(); renderBadges();
+  if (S.tab === "places") renderPlaces();
+  if (S.tab === "out") renderOut();
+  if (S.tab === "list") renderList();
+}
+function renderBadges(){
+  const items = Object.values(S.items);
+  const out = items.filter(isOut).length, buy = items.filter(needsBuying).length + Object.keys(S.extras).length;
+  $("#outBadge").hidden = !out; $("#outBadge").textContent = out;
+  $("#listBadge").hidden = !buy; $("#listBadge").textContent = buy;
+}
+function renderGarage(){
+  const items = Object.values(S.items);
+  $("#n-all").textContent = items.length;
+  $("#n-out").textContent = items.filter(isOut).length;
+  $("#n-attn").textContent = items.filter(isAttn).length;
+  $("#n-low").textContent = items.filter(isLow).length;
+  document.querySelectorAll(".summary [data-f]").forEach(b => b.setAttribute("aria-pressed", String(S.f === b.dataset.f)));
+
+  const present = DEPTS.filter(d => items.some(i => i.department === d));
+  if (S.dept !== "All" && !present.includes(S.dept)) { S.dept = "All"; S.cat = "All"; }
+  $("#depts").innerHTML = ["All", ...present].map(d => `<button class="chip" data-dept="${esc(d)}" aria-pressed="${S.dept === d}">${esc(d === "All" ? "All departments" : d)}</button>`).join("");
+  if (S.dept !== "All") {
+    const cats = catsOf(S.dept).map(c => c.name).filter(c => items.some(i => i.department === S.dept && i.category === c));
+    $("#cats").innerHTML = ["All", ...cats].map(c => `<button class="chip" data-cat="${esc(c)}" aria-pressed="${S.cat === c}">${esc(c === "All" ? "Everything in " + S.dept : c)}</button>`).join("");
+    $("#cats").hidden = false;
+  } else $("#cats").hidden = true;
+
+  const fpass = it => S.f === "all" || (S.f === "out" && isOut(it)) || (S.f === "attn" && isAttn(it)) || (S.f === "low" && isLow(it));
+  const list = items.filter(it => fpass(it) && (S.dept === "All" || it.department === S.dept) && (S.cat === "All" || it.category === S.cat) && matches(it, S.q))
+    .sort((a, b) => (isOverdue(b) - isOverdue(a)) || (isAttn(b) - isAttn(a)) || (isLow(b) - isLow(a)) || a.name.localeCompare(b.name));
+
+  if (S.q.trim()) {
+    const tools = list.filter(isTool), avail = tools.filter(t => t.status === "available").reduce((n, t) => n + (num(t.qty) || 1), 0);
+    const sup = list.filter(i => !isTool(i));
+    $("#answer").innerHTML = list.length
+      ? `<b>Yes.</b> ${list.length} match${list.length === 1 ? "" : "es"}${tools.length ? ` · ${avail} available` : ""}${sup.length ? ` · ${sup.length} suppl${sup.length === 1 ? "y" : "ies"}` : ""}`
+      : `<b>Not found.</b> Nothing in the garage matches “${esc(S.q.trim())}”. <button class="link" data-act="addFromSearch">Add it</button>`;
+  } else $("#answer").innerHTML = "";
+
+  $("#shelf").innerHTML = list.length ? list.map(rowHTML).join("") :
+    S.q.trim() ? "" : `<div class="empty">${items.length ? "Nothing matches these filters." : "The garage is empty. Tap Add, or scan a tool's barcode to start."}</div>`;
+  $("#exampleNote").hidden = !items.some(i => i.example) && !Object.values(S.locs).some(l => l.example);
+  fillPhotos($("#shelf"));
+}
+function rowHTML(it){
+  const loc = locName(it.locationId);
+  const meta = [it.category, loc, it.platform].filter(Boolean);
+  let right;
+  if (isTool(it)) {
+    const st = isOverdue(it) ? `<span class="pill overdue">Overdue</span>` : `<span class="pill ${it.status}">${STATUS[it.status] || it.status}</span>`;
+    right = `<div class="right">${st}${num(it.qty) > 1 ? `<span class="qtyx">×${num(it.qty)}</span>` : ""}</div>`;
+  } else {
+    const a = amtText(it), step = STEP_UNITS.has(it.unit);
+    right = `<div class="qty">
+      <button class="step" data-act="${step ? "dec" : "set"}" aria-label="${step ? "Use one" : "Update amount"}">${step ? "−" : "✎"}</button>
+      <div class="amt ${isLow(it) ? "low" : ""}">${a.big}<small>${esc(a.small)}</small></div>
+      ${step ? `<button class="step" data-act="inc" aria-label="Add one">+</button>` : ""}
+    </div>`;
+  }
+  return `<div class="item" data-id="${esc(it.id)}">
+    ${thumbHTML(it)}
+    <button class="main" data-act="open">
+      <div class="name">${esc(it.name)}${it.example ? ` <span class="pill ex">Example</span>` : ""}</div>
+      <div class="meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}${it.status === "loaned" && it.loan ? `<span>with ${esc(it.loan.to)}</span>` : ""}</div>
+    </button>
+    ${right}
+  </div>`;
+}
+
+/* ---------- sheet ---------- */
+function openSheet(html){ $("#sheetCard").innerHTML = html; $("#sheet").hidden = false; $("#sheetCard").scrollTop = 0; fillPhotos($("#sheetCard")); }
+function closeSheet(){ $("#sheet").hidden = true; $("#sheetCard").innerHTML = ""; }
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+
+/* ---------- item detail ---------- */
+function openItem(id){
+  const it = S.items[id]; if (!it) return;
+  const loc = S.locs[it.locationId];
+  const facts = [];
+  const add = (k, v) => { if (v !== "" && v != null) facts.push(`<dt>${k}</dt><dd>${v}</dd>`); };
+  if (isTool(it)) {
+    let st = `<span class="pill ${isOverdue(it) ? "overdue" : it.status}">${isOverdue(it) ? "Overdue" : STATUS[it.status]}</span>`;
+    if (it.status === "loaned" && it.loan) st += ` with ${esc(it.loan.to)} since ${fmtDate(it.loan.since)}${it.loan.due ? `, due ${fmtDate(it.loan.due)}` : ""}`;
+    if (it.status === "away" && it.away) st += ` ${esc(it.away.where)} since ${fmtDate(it.away.since)}`;
+    add("Status", st);
+    if (num(it.qty) > 1) add("How many", num(it.qty));
+  } else {
+    add("Have", `<b>${esc(amtText(it).big)}</b> ${esc(it.unit === "count" ? "" : it.unit)} · low at ${esc(num(it.threshold))}${isLow(it) ? ` <span class="pill low">Low</span>` : ""}`);
+  }
+  add("Where", loc ? `${esc(loc.name)}${loc.area ? ` · ${esc(loc.area)}` : ""}` : `<span class="hint">Not assigned</span>`);
+  add("Brand", esc([it.brand, it.model].filter(Boolean).join(" · ")));
+  add("Battery", esc(it.platform || ""));
+  if (isTool(it) && it.power) add("Power", esc(POWER[it.power] || it.power));
+  add("Serial", it.serial ? `<span class="mono">${esc(it.serial)}</span>` : "");
+  const p = it.purchase || {};
+  const price = isTool(it) ? p.price : it.price, store = isTool(it) ? p.store : it.store;
+  add("Bought", esc([money(price), store, p.date && fmtDate(p.date)].filter(Boolean).join(" · ")));
+  if (it.warrantyUntil) add("Warranty", `until ${fmtDate(it.warrantyUntil)}${it.warrantyUntil < today() ? ` <span class="pill missing">Expired</span>` : ""}`);
+  if (it.manualUrl) add("Manual", `<a href="${esc(it.manualUrl)}" target="_blank" rel="noopener">Open manual</a>`);
+  add("Barcode", it.barcode ? `<span class="mono">${esc(it.barcode)}</span>` : "");
+  add("Notes", esc(it.notes || ""));
+
+  let actions = "";
+  if (isTool(it)) {
+    if (it.status === "available") actions = `
+      <button class="btn" data-a="loan">Loan out</button><button class="btn ghost" data-a="away">Take away</button>
+      <button class="btn ghost" data-a="repair">Needs repair</button><button class="btn ghost" data-a="missing">Can't find it</button>`;
+    else actions = `<button class="btn full" data-a="back">${{ loaned:"Returned", away:"Back in the garage", repair:"Fixed", missing:"Found it" }[it.status] || "Available"}</button>
+      ${it.status !== "loaned" ? `<button class="btn ghost" data-a="loan">Loan out</button>` : ""}${it.status !== "repair" ? `<button class="btn ghost" data-a="repair">Needs repair</button>` : ""}${it.status !== "missing" ? `<button class="btn ghost" data-a="missing">Can't find it</button>` : ""}`;
+  } else {
+    const step = STEP_UNITS.has(it.unit);
+    actions = `${step ? `<button class="btn" data-a="dec">Used one</button>` : `<button class="btn" data-a="set">Update amount</button>`}
+      <button class="btn ghost" data-a="restock">Restocked +${esc(num(it.restock) || 1)}</button>`;
+  }
+  const replace = isTool(it) && it.status !== "missing" ? `<button class="link" data-a="replace">${it.replace ? "Remove from shopping list" : "Add to shopping list"}</button>` : "";
+  openSheet(`<div class="ihead">${thumbHTML(it)}<div class="main"><span class="tag">${esc(it.code || "")}</span><h2>${esc(it.name)}</h2><div class="meta"><span>${esc(it.department)} › ${esc(it.category)}</span></div></div></div>
+    <dl class="facts">${facts.join("")}</dl>
+    <div class="actions">${actions}</div>
+    <div class="minor"><button class="link" data-a="move">Move</button><button class="link" data-a="edit">Edit</button><button class="link" data-a="label">Print label</button>${replace}<button class="link" data-a="close" style="margin-left:auto">Close</button></div>`);
+  $("#sheetCard").onclick = e => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const cur = S.items[id]; if (!cur) return;
+    const a = b.dataset.a;
+    if (a === "close") return closeSheet();
+    if (a === "edit") return editItem(cur, false);
+    if (a === "move") return moveItem(cur);
+    if (a === "label") return openLabels({ items:[id] });
+    if (a === "loan") return loanItem(cur);
+    if (a === "away") return awayItem(cur);
+    if (a === "set") return setAmount(cur);
+    if (a === "repair" || a === "missing") { setStatus(cur, a); return openItem(id); }
+    if (a === "back") { setStatus(cur, "available"); toast(cur.name + " is available"); return openItem(id); }
+    if (a === "replace") { putItem({ ...cur, replace: !cur.replace }); toast(cur.replace ? "Removed from the list" : "Added to the shopping list"); return openItem(id); }
+    if (a === "dec") { putItem({ ...cur, amount: Math.max(0, num(cur.amount) - 1) }); lowToast(cur, S.items[id]); return openItem(id); }
+    if (a === "restock") { putItem({ ...cur, amount: num(cur.amount) + (num(cur.restock) || 1) }); toast("Restocked"); return openItem(id); }
+  };
+}
+function lowToast(before, after){ if (isLow(after) && !isLow(before)) toast(after.name + " added to the shopping list"); }
+function setStatus(it, status){
+  const n = { ...it, status };
+  if (status === "available") {
+    if (it.loan) n.loanHistory = [...(it.loanHistory || []), { ...it.loan, returned: today() }].slice(-8);
+    n.loan = null; n.away = null; n.replace = false;
+  }
+  if (status !== "loaned") n.loan = null;
+  if (status !== "away") n.away = null;
+  delete n.example;
+  putItem(n);
+  if (status === "missing") toast(it.name + " marked missing and added to the list");
+  if (status === "repair") toast(it.name + " marked for repair");
+}
+function borrowers(){
+  const set = new Set();
+  Object.values(S.items).forEach(i => { if (i.loan && i.loan.to) set.add(i.loan.to); (i.loanHistory || []).forEach(l => l.to && set.add(l.to)); });
+  return [...set];
+}
+function loanItem(it){
+  $("#borrowerList").innerHTML = borrowers().map(b => `<option value="${esc(b)}">`).join("");
+  openSheet(`<h2>Loan out ${esc(it.name)}</h2>
+    <div class="form">
+      <label class="full">Who has it<input type="text" id="l-to" list="borrowerList" placeholder="e.g. Mike next door"></label>
+      <label>Lent on<input type="date" id="l-since" value="${today()}"></label>
+      <label>Due back<input type="date" id="l-due" value="${addDays(today(), 14)}"></label>
+    </div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="l-c">Cancel</button><button class="btn" id="l-s">Loan out</button></div>`);
+  $("#l-to").focus();
+  $("#l-c").onclick = () => openItem(it.id);
+  $("#l-s").onclick = () => {
+    const to = $("#l-to").value.trim(); if (!to) { $("#l-to").focus(); return toast("Add who has it"); }
+    putItem({ ...it, status:"loaned", away:null, loan:{ to, since: $("#l-since").value || today(), due: $("#l-due").value || "" } });
+    toast("Loaned to " + to); openItem(it.id);
+  };
+}
+function awayItem(it){
+  openSheet(`<h2>Take away ${esc(it.name)}</h2>
+    <div class="chips" style="flex-wrap:wrap">${["In the truck","At a job site","In the house","At the cabin"].map(w => `<button class="chip" data-w="${esc(w)}">${esc(w)}</button>`).join("")}</div>
+    <div class="form"><label class="full">Where is it<input type="text" id="w-where" value="In the truck"></label></div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="w-c">Cancel</button><button class="btn" id="w-s">Save</button></div>`);
+  $("#sheetCard").querySelectorAll("[data-w]").forEach(b => b.onclick = () => $("#w-where").value = b.dataset.w);
+  $("#w-c").onclick = () => openItem(it.id);
+  $("#w-s").onclick = () => { putItem({ ...it, status:"away", loan:null, away:{ where: $("#w-where").value.trim() || "Away", since: today() } }); openItem(it.id); };
+}
+function locOptions(sel, allowNew = true){
+  const locs = Object.values(S.locs).sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+  return `<option value="">Not assigned</option>` + locs.map(l => `<option value="${esc(l.id)}" ${l.id === sel ? "selected" : ""}>${esc(l.name)}${l.area ? " · " + esc(l.area) : ""}</option>`).join("") + (allowNew ? `<option value="__new">+ New place…</option>` : "");
+}
+function wireLocSelect(selId, newId_){
+  const sel = $(selId), box = $(newId_);
+  sel.onchange = () => { box.hidden = sel.value !== "__new"; if (!box.hidden) box.querySelector("input").focus(); };
+}
+function resolveLoc(selId, nameId){
+  const v = $(selId).value;
+  if (v !== "__new") return v;
+  const name = $(nameId).value.trim(); if (!name) return "";
+  const l = { id:newId("loc"), name, area:"", code:nextCode("loc"), order:Object.keys(S.locs).length + 1 };
+  S.locs[l.id] = l; return l.id;
+}
+function moveItem(it){
+  openSheet(`<h2>Move ${esc(it.name)}</h2>
+    <div class="form"><label class="full">New place<select id="m-loc">${locOptions(it.locationId)}</select></label>
+    <label class="full" id="m-newbox" hidden>Name of the new place<input type="text" id="m-new" placeholder="e.g. Shelf C, top bin"></label></div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="m-c">Cancel</button><button class="btn" id="m-s">Move</button></div>`);
+  wireLocSelect("#m-loc", "#m-newbox");
+  $("#m-c").onclick = () => openItem(it.id);
+  $("#m-s").onclick = () => { const loc = resolveLoc("#m-loc", "#m-new"); putItem({ ...it, locationId: loc }); toast("Moved to " + (locName(loc) || "Not assigned")); openItem(it.id); };
+}
+function setAmount(it){
+  openSheet(`<h2>${esc(it.name)}</h2><p class="lede">How much is left?</p>
+    <div class="row"><input type="number" id="sa" inputmode="decimal" step="any" min="0" value="${esc(num(it.amount))}" style="flex:1"><span class="mono">${esc(it.unit)}</span></div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="sa-c">Cancel</button><button class="btn" id="sa-s">Update</button></div>`);
+  $("#sa-c").onclick = () => openItem(it.id);
+  $("#sa-s").onclick = () => { const n = { ...it, amount: num($("#sa").value) }; putItem(n); lowToast(it, n); openItem(it.id); };
+}
+
+/* ---------- add / edit form ---------- */
+let pendingPhoto = null;
+function platforms(){
+  const set = new Set([...(CFG.platforms || []), ...Object.values(S.items).map(i => i.platform).filter(Boolean), ...DEFAULT_PLATFORMS]);
+  return [...set];
+}
+function editItem(it, isNew){
+  pendingPhoto = null;
+  it = { kind:"tool", qty:1, status:"available", unit:"count", amount:1, threshold:1, restock:1, power:"", department:"", category:"", ...it };
+  if (!it.department || !validCat(it.department, it.category)) {
+    const g = it.name ? guessCategory(it.name) : null;
+    if (g) { it.department = g.department; it.category = g.category; if (isNew && !it.kindLocked) it.kind = g.kind; }
+    else { it.department = it.department && DEPTS.includes(it.department) ? it.department : "Other"; it.category = catsOf(it.department)[0].name; }
+  }
+  $("#platformList").innerHTML = platforms().map(p => `<option value="${esc(p)}">`).join("");
+  const p = it.purchase || {};
+  const deptOpts = DEPTS.map(d => `<option ${d === it.department ? "selected" : ""}>${esc(d)}</option>`).join("");
+  openSheet(`<h2>${isNew ? "Add to the garage" : "Edit " + esc(it.name)}</h2>
+    <div class="form">
+      <div class="full seg" role="group" aria-label="Kind"><button type="button" data-kind="tool" aria-pressed="${it.kind === "tool"}">Tool or equipment</button><button type="button" data-kind="supply" aria-pressed="${it.kind === "supply"}">Supply (gets used up)</button></div>
+      <div class="full row" style="align-items:center">
+        ${it.hasPhoto ? `<img id="f-photo" data-photo="${esc(it.id)}" alt="" style="width:64px;height:64px;border-radius:8px;object-fit:cover">` : `<img id="f-photo" alt="" hidden style="width:64px;height:64px;border-radius:8px;object-fit:cover">`}
+        <label class="btn ghost sm" for="f-file">${it.hasPhoto ? "Change photo" : "Add photo"}</label><input type="file" id="f-file" accept="image/*" capture="environment" hidden>
+        <button type="button" class="btn ghost sm" id="f-ai" ${CFG.apiKey ? "" : "hidden"}>Identify from photo</button>
+      </div>
+      <p class="full hint" id="f-msg" style="margin:0"></p>
+      <label class="full">Name<input type="text" id="f-name" value="${esc(it.name || "")}" placeholder="e.g. 18V jigsaw, 3/8&quot; drive ratchet"></label>
+      <label>Department<select id="f-dept">${deptOpts}</select></label>
+      <label>Category<select id="f-cat"></select></label>
+      <label>Brand<input type="text" id="f-brand" value="${esc(it.brand || "")}"></label>
+      <label>Model<input type="text" id="f-model" value="${esc(it.model || "")}"></label>
+      <label class="full">Place<select id="f-loc">${locOptions(it.locationId)}</select></label>
+      <label class="full" id="f-newbox" hidden>Name of the new place<input type="text" id="f-new" placeholder="e.g. Shelf C, top bin"></label>
+
+      <div class="full form" data-for="tool" style="grid-column:1/-1">
+        <label>Battery platform<input type="text" id="f-platform" list="platformList" value="${esc(it.platform || "")}" placeholder="None"></label>
+        <label>Power<select id="f-power"><option value="">—</option>${Object.entries(POWER).map(([k, v]) => `<option value="${k}" ${k === it.power ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+        <label>How many<input type="number" id="f-qty" min="1" step="1" inputmode="numeric" value="${esc(num(it.qty) || 1)}"></label>
+        <label>Serial number<input type="text" id="f-serial" value="${esc(it.serial || "")}"></label>
+        <label>Price paid ($)<input type="number" id="f-tprice" step="0.01" min="0" inputmode="decimal" value="${esc(p.price ?? "")}"></label>
+        <label>Bought on<input type="date" id="f-tdate" value="${esc(p.date || "")}"></label>
+        <label>Store<input type="text" id="f-tstore" value="${esc(p.store || "")}" placeholder="e.g. Lowe's"></label>
+        <label>Warranty until<input type="date" id="f-warranty" value="${esc(it.warrantyUntil || "")}"></label>
+        <label class="full">Manual link<input type="url" id="f-manual" value="${esc(it.manualUrl || "")}" placeholder="https://"></label>
+      </div>
+
+      <div class="full form" data-for="supply" style="grid-column:1/-1">
+        <label>Measured in<select id="f-unit">${UNITS.map(u => `<option ${u === it.unit ? "selected" : ""}>${u}</option>`).join("")}</select></label>
+        <label>Have now<input type="number" id="f-amount" step="any" min="0" inputmode="decimal" value="${esc(num(it.amount))}"></label>
+        <label>Low at or below<input type="number" id="f-threshold" step="any" min="0" inputmode="decimal" value="${esc(num(it.threshold))}"></label>
+        <label>Usually buy<input type="number" id="f-restock" step="any" min="0" inputmode="decimal" value="${esc(num(it.restock) || 1)}"></label>
+        <label>Price ($)<input type="number" id="f-sprice" step="0.01" min="0" inputmode="decimal" value="${esc(it.price ?? "")}"></label>
+        <label>Store<input type="text" id="f-sstore" value="${esc(it.store || "")}" placeholder="e.g. Home Depot"></label>
+      </div>
+
+      <label class="full">Barcode<input type="text" id="f-barcode" class="mono" value="${esc(it.barcode || "")}"></label>
+      <label class="full">Notes<textarea id="f-notes">${esc(it.notes || "")}</textarea></label>
+    </div>
+    <div class="row between" style="margin-top:14px">
+      <div>${isNew ? "" : `<button class="btn danger" id="f-del">Delete</button>`}</div>
+      <div class="row"><button class="btn ghost" id="f-cancel">Cancel</button><button class="btn" id="f-save">${isNew ? "Add" : "Save"}</button></div>
+    </div>`);
+
+  let kind = it.kind;
+  const setKind = k => { kind = k; $("#sheetCard").querySelectorAll("[data-kind]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === k))); $("#sheetCard").querySelectorAll("[data-for]").forEach(el => el.hidden = el.dataset.for !== k); };
+  const fillCats = (dept, sel) => { $("#f-cat").innerHTML = catsOf(dept).map(c => `<option ${c.name === sel ? "selected" : ""}>${esc(c.name)}</option>`).join(""); };
+  setKind(kind); fillCats(it.department, it.category);
+  $("#sheetCard").querySelectorAll("[data-kind]").forEach(b => b.onclick = () => setKind(b.dataset.kind));
+  $("#f-dept").onchange = () => { fillCats($("#f-dept").value); if (isNew) setKind(kindOf($("#f-dept").value, $("#f-cat").value)); };
+  $("#f-cat").onchange = () => { if (isNew) setKind(kindOf($("#f-dept").value, $("#f-cat").value)); };
+  wireLocSelect("#f-loc", "#f-newbox");
+  if (it.photoBlob) { usePhoto(it.photoBlob); }
+  $("#f-file").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) usePhoto(f); };
+  async function usePhoto(blob){
+    try { pendingPhoto = { blob, thumb: await makeThumb(blob) }; $("#f-photo").src = pendingPhoto.thumb; $("#f-photo").hidden = false; }
+    catch(e){ toast("That photo couldn't be opened."); }
+  }
+  $("#f-ai").onclick = async () => {
+    if (!pendingPhoto) { $("#f-msg").textContent = "Add a photo of the tool, its box or its model plate first."; return; }
+    $("#f-msg").textContent = "Asking Claude…"; $("#f-ai").disabled = true;
+    try { const r = await identifyPhoto(pendingPhoto.blob, $("#f-barcode").value.trim()); applyIdentity(r); $("#f-msg").textContent = "Filled in from the photo. Check it before saving."; }
+    catch(err){ $("#f-msg").textContent = (err && err.message) || "Claude couldn't identify that photo."; }
+    $("#f-ai").disabled = false;
+  };
+  function applyIdentity(r){
+    if (r.name) $("#f-name").value = r.name;
+    if (r.brand) $("#f-brand").value = r.brand;
+    if (r.model) $("#f-model").value = r.model;
+    if (r.department && DEPTS.includes(r.department)) { $("#f-dept").value = r.department; fillCats(r.department, r.category); }
+    if (r.kind === "tool" || r.kind === "supply") setKind(r.kind);
+    if (r.platform) $("#f-platform").value = r.platform;
+    if (r.power && POWER[r.power]) $("#f-power").value = r.power;
+    if (r.unit && UNITS.includes(r.unit)) $("#f-unit").value = r.unit;
+    if (r.barcode && !$("#f-barcode").value) $("#f-barcode").value = String(r.barcode).replace(/\s/g, "");
+  }
+  editItem.applyIdentity = applyIdentity;
+
+  $("#f-cancel").onclick = () => isNew ? closeSheet() : openItem(it.id);
+  if (!isNew) $("#f-del").onclick = () => { $("#f-del").textContent = "Tap again to delete"; $("#f-del").onclick = () => { const nm = it.name; dropItem(it.id); closeSheet(); toast("Deleted " + nm); }; };
+  $("#f-save").onclick = async () => {
+    const name = $("#f-name").value.trim(); if (!name) { $("#f-name").focus(); return toast("Give it a name"); }
+    const n = { ...it, kind, name, department: $("#f-dept").value, category: $("#f-cat").value, brand: $("#f-brand").value.trim(), model: $("#f-model").value.trim(),
+      locationId: resolveLoc("#f-loc", "#f-new"), barcode: $("#f-barcode").value.replace(/\s/g, ""), notes: $("#f-notes").value.trim() };
+    delete n.photoBlob; delete n.kindLocked; delete n.example;
+    if (kind === "tool") {
+      Object.assign(n, { platform: $("#f-platform").value.trim(), power: $("#f-power").value, qty: Math.max(1, Math.round(num($("#f-qty").value)) || 1), serial: $("#f-serial").value.trim(),
+        purchase: { price: $("#f-tprice").value === "" ? null : num($("#f-tprice").value), date: $("#f-tdate").value, store: $("#f-tstore").value.trim() },
+        warrantyUntil: $("#f-warranty").value, manualUrl: $("#f-manual").value.trim() });
+      n.status = n.status || "available";
+    } else {
+      const price = $("#f-sprice").value === "" ? null : num($("#f-sprice").value);
+      Object.assign(n, { unit: $("#f-unit").value, amount: num($("#f-amount").value), threshold: num($("#f-threshold").value), restock: num($("#f-restock").value) || 1, store: $("#f-sstore").value.trim() });
+      if (price != null && price !== it.price) n.priceHistory = [...(it.priceHistory || []), { p: price, d: today(), s: n.store }].slice(-6);
+      n.price = price;
+    }
+    if (isNew) { n.id = newId("it"); n.code = nextCode("it"); }
+    if (pendingPhoto) { await photoPut(n.id, pendingPhoto.thumb); n.hasPhoto = true; }
+    putItem(n); toast(isNew ? "Added " + n.name : "Saved");
+    openItem(n.id);
+  };
+}
+$("#addBtn").onclick = () => editItem({ name: S.q.trim(), department: S.dept !== "All" ? S.dept : "", category: S.cat !== "All" ? S.cat : "" }, true);
+
+/* ---------- garage interactions ---------- */
+$("#shelf").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const id = b.closest(".item").dataset.id, it = S.items[id]; if (!it) return;
+  const a = b.dataset.act;
+  if (a === "open") return openItem(id);
+  if (a === "set") return setAmount(it);
+  const n = { ...it, amount: Math.max(0, num(it.amount) + (a === "inc" ? 1 : -1)) }; delete n.example;
+  putItem(n); lowToast(it, n);
+});
+$("#answer").addEventListener("click", e => { if (e.target.closest("[data-act=addFromSearch]")) $("#addBtn").click(); });
+document.querySelector(".summary").addEventListener("click", e => { const b = e.target.closest("[data-f]"); if (!b) return; S.f = S.f === b.dataset.f ? "all" : b.dataset.f; renderGarage(); });
+$("#depts").addEventListener("click", e => { const b = e.target.closest("[data-dept]"); if (!b) return; S.dept = b.dataset.dept; S.cat = "All"; renderGarage(); });
+$("#cats").addEventListener("click", e => { const b = e.target.closest("[data-cat]"); if (!b) return; S.cat = b.dataset.cat; renderGarage(); });
+$("#q").addEventListener("input", e => { S.q = e.target.value; renderGarage(); });
+$("#clearEx").onclick = () => {
+  Object.values(S.items).forEach(i => { if (i.example) { delete S.items[i.id]; photoDel(i.id); } });
+  Object.values(S.locs).forEach(l => { if (l.example && !Object.values(S.items).some(i => i.locationId === l.id)) delete S.locs[l.id]; });
+  saveAll(); renderAll(); toast("Examples removed");
+};
+
+/* ---------- places ---------- */
+function itemsIn(locId){ return Object.values(S.items).filter(i => (i.locationId || "") === locId).sort((a, b) => a.name.localeCompare(b.name)); }
+function renderPlaces(){
+  const locs = Object.values(S.locs).sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+  const un = itemsIn("");
+  $("#locList").innerHTML = (locs.length ? locs.map(l => {
+    const its = itemsIn(l.id), miss = its.filter(i => i.status === "missing").length;
+    return `<button class="loc" data-loc="${esc(l.id)}"><div style="min-width:0"><div class="name">${esc(l.name)}${l.example ? ` <span class="pill ex">Example</span>` : ""}</div><div class="meta">${l.area ? `<span>${esc(l.area)}</span>` : ""}<span class="mono">${esc(l.code)}</span>${miss ? `<span class="pill missing">${miss} missing</span>` : ""}</div></div><span class="count">${its.length}<small>items</small></span></button>`;
+  }).join("") : `<div class="empty">No places yet. Add the walls, shelves and bins in your garage, then print a label for each.</div>`)
+  + (un.length ? `<button class="loc" data-loc=""><div><div class="name">Not assigned</div><div class="meta"><span>Items without a place</span></div></div><span class="count">${un.length}<small>items</small></span></button>` : "");
+}
+$("#locList").addEventListener("click", e => { const b = e.target.closest("[data-loc]"); if (b) openLoc(b.dataset.loc); });
+$("#addLoc").onclick = () => editLoc(null);
+$("#printLabels").onclick = () => openLabels({});
+function openLoc(id){
+  const l = S.locs[id], its = itemsIn(id);
+  openSheet(`<div class="ihead" style="grid-template-columns:1fr"><div class="main">${l ? `<span class="tag">${esc(l.code)}</span>` : ""}<h2>${esc(l ? l.name : "Not assigned")}</h2>${l && l.area ? `<div class="meta"><span>${esc(l.area)}</span></div>` : ""}</div></div>
+    <div class="shelf">${its.length ? its.map(rowHTML).join("") : `<div class="empty">Nothing here yet.</div>`}</div>
+    ${l ? `<div class="actions" style="margin-top:14px"><button class="btn" data-a="audit" ${its.length ? "" : "disabled"}>Check what's here</button><button class="btn ghost" data-a="label">Print label</button></div>
+    <div class="minor"><button class="link" data-a="rename">Rename</button>${its.length ? "" : `<button class="link" data-a="delete" style="color:var(--bad)">Delete place</button>`}<button class="link" data-a="close" style="margin-left:auto">Close</button></div>`
+    : `<div class="minor"><button class="link" data-a="close" style="margin-left:auto">Close</button></div>`}`);
+  $("#sheetCard").onclick = e => {
+    const row = e.target.closest(".item");
+    if (row) { const b = e.target.closest("[data-act]"); if (!b) return; const it = S.items[row.dataset.id]; if (!it) return;
+      if (b.dataset.act === "open") return openItem(it.id);
+      if (b.dataset.act === "set") return setAmount(it);
+      const n = { ...it, amount: Math.max(0, num(it.amount) + (b.dataset.act === "inc" ? 1 : -1)) }; putItem(n); lowToast(it, n); return openLoc(id); }
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const a = b.dataset.a;
+    if (a === "close") return closeSheet();
+    if (a === "audit") return auditLoc(id);
+    if (a === "label") return openLabels({ locs:[id] });
+    if (a === "rename") return editLoc(l);
+    if (a === "delete") { if (b.dataset.sure) { delete S.locs[id]; saveAll(); renderAll(); closeSheet(); return toast("Place deleted"); } b.dataset.sure = 1; b.textContent = "Tap again to delete"; }
+  };
+}
+function editLoc(l){
+  openSheet(`<h2>${l ? "Rename place" : "Add a place"}</h2>
+    <div class="form"><label class="full">Name<input type="text" id="p-name" value="${esc(l ? l.name : "")}" placeholder="e.g. Bin 4 · Plumbing, Pegboard wall, Top drawer"></label>
+    <label class="full">Area (optional)<input type="text" id="p-area" value="${esc(l ? l.area || "" : "")}" placeholder="e.g. Shelf B, north wall, truck"></label></div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="p-c">Cancel</button><button class="btn" id="p-s">${l ? "Save" : "Add place"}</button></div>`);
+  $("#p-name").focus();
+  $("#p-c").onclick = () => l ? openLoc(l.id) : closeSheet();
+  $("#p-s").onclick = () => {
+    const name = $("#p-name").value.trim(); if (!name) return $("#p-name").focus();
+    const n = l ? { ...l, name, area: $("#p-area").value.trim() } : { id:newId("loc"), name, area: $("#p-area").value.trim(), code: nextCode("loc"), order: Object.keys(S.locs).length + 1 };
+    delete n.example; putLoc(n); toast(l ? "Saved" : "Added " + name); openLoc(n.id);
+  };
+}
+function auditLoc(id){
+  const l = S.locs[id], its = itemsIn(id);
+  openSheet(`<h2>Check ${esc(l.name)}</h2>
+    <p class="lede">Tick everything you can see. Tools you don't tick are marked missing and go on the shopping list. Tools you find that were missing go back to available.</p>
+    <div class="checks">${its.map(i => `<label><input type="checkbox" data-aud="${esc(i.id)}" ${i.status === "loaned" || i.status === "away" || i.status === "repair" ? "disabled checked" : ""}><span>${esc(i.name)}${i.status !== "available" && i.status ? ` <span class="pill ${i.status}">${STATUS[i.status]}</span>` : ""}${!isTool(i) ? ` <span class="hint">supply</span>` : ""}</span></label>`).join("")}</div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="a-c">Cancel</button><button class="btn" id="a-s">Finish check</button></div>`);
+  $("#a-c").onclick = () => openLoc(id);
+  $("#a-s").onclick = () => {
+    let missing = 0, found = 0;
+    $("#sheetCard").querySelectorAll("[data-aud]:not(:disabled)").forEach(cb => {
+      const it = S.items[cb.dataset.aud]; if (!it || !isTool(it)) return;
+      if (!cb.checked && it.status === "available") { S.items[it.id] = { ...it, status:"missing", updated:Date.now() }; missing++; }
+      if (cb.checked && it.status === "missing") { S.items[it.id] = { ...it, status:"available", updated:Date.now() }; found++; }
+    });
+    saveAll(); renderAll();
+    toast(missing || found ? `${missing} marked missing · ${found} found` : "Everything's where it should be");
+    openLoc(id);
+  };
+}
+
+/* ---------- labels (QR) ---------- */
+const QR_SRC = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js";
+const LABELS = {
+  "5160": { name:"Avery 5160 / 8160 · 1\" × 2⅝\" · 30 per sheet", cols:3, w:2.625, h:1, top:.5, side:.1875, gapX:.125, gapY:0, qr:.8, nameSize:9, codeSize:7 },
+  "5163": { name:"Avery 5163 / 8163 · 2\" × 4\" · 10 per sheet", cols:2, w:4, h:2, top:.5, side:.15625, gapX:.1875, gapY:0, qr:1.6, nameSize:15, codeSize:10 },
+  "plain": { name:"Plain paper, cut out · 15 per sheet", cols:3, w:2.5, h:1.6, top:.5, side:.25, gapX:.25, gapY:.25, qr:1.25, nameSize:11, codeSize:8, border:true }
+};
+function qrSVG(text, sizeIn){
+  const q = qrcode(0, "M"); q.addData(text); q.make();
+  const n = q.getModuleCount(); let d = "";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
+  return `<svg viewBox="-1 -1 ${n + 2} ${n + 2}" style="width:${sizeIn}in;height:${sizeIn}in" shape-rendering="crispEdges" aria-hidden="true"><rect x="-1" y="-1" width="${n + 2}" height="${n + 2}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+function openLabels(pre){
+  const locs = Object.values(S.locs).sort((a, b) => (a.order || 0) - (b.order || 0) || a.name.localeCompare(b.name));
+  const tools = Object.values(S.items).sort((a, b) => a.name.localeCompare(b.name));
+  const preset = !!(pre.locs || pre.items);
+  const lc = l => preset ? (pre.locs || []).includes(l.id) : true;
+  const ic = i => preset ? (pre.items || []).includes(i.id) : false;
+  openSheet(`<h2>Print labels</h2>
+    <p class="lede">Stick a label on each bin, shelf or tool. Scanning it in the Scan tab opens it here.</p>
+    <div class="form"><label class="full">Label sheet<select id="lb-size">${Object.entries(LABELS).map(([k, v]) => `<option value="${k}" ${k === (CFG.labelSize || "5160") ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select></label></div>
+    <h3>Places <button class="link" data-all="loc">All</button> · <button class="link" data-none="loc">None</button></h3>
+    <div class="checks">${locs.map(l => `<label><input type="checkbox" data-lbl="loc" value="${esc(l.id)}" ${lc(l) ? "checked" : ""}><span>${esc(l.name)} <span class="mono hint">${esc(l.code)}</span></span></label>`).join("") || `<p class="hint">No places yet.</p>`}</div>
+    <h3>Items <button class="link" data-all="it">All</button> · <button class="link" data-none="it">None</button></h3>
+    <div class="checks">${tools.map(i => `<label><input type="checkbox" data-lbl="it" value="${esc(i.id)}" ${ic(i) ? "checked" : ""}><span>${esc(i.name)} <span class="mono hint">${esc(i.code)}</span></span></label>`).join("") || `<p class="hint">No items yet.</p>`}</div>
+    <p class="hint" id="lb-count" style="margin-top:10px"></p>
+    <p class="hint">In the print dialog, set scale to 100% (Actual size) and turn off headers and footers.</p>
+    <div class="row end" style="margin-top:10px"><button class="btn ghost" id="lb-c">Cancel</button><button class="btn" id="lb-p">Print</button></div>`);
+  const card = $("#sheetCard");
+  const count = () => { const n = card.querySelectorAll("[data-lbl]:checked").length, L = LABELS[$("#lb-size").value], per = L.cols * Math.floor((11 - 2 * L.top + L.gapY) / (L.h + L.gapY)); $("#lb-count").textContent = n ? `${n} label${n === 1 ? "" : "s"} on ${Math.ceil(n / per)} sheet${Math.ceil(n / per) === 1 ? "" : "s"}.` : "Choose at least one label."; };
+  count();
+  card.onchange = count;
+  card.onclick = e => {
+    const all = e.target.closest("[data-all]"), none = e.target.closest("[data-none]");
+    if (all) card.querySelectorAll(`[data-lbl=${all.dataset.all}]`).forEach(c => c.checked = true);
+    if (none) card.querySelectorAll(`[data-lbl=${none.dataset.none}]`).forEach(c => c.checked = false);
+    if (all || none) count();
+  };
+  $("#lb-c").onclick = closeSheet;
+  $("#lb-p").onclick = async () => {
+    const chosen = [...card.querySelectorAll("[data-lbl]:checked")].map(c => c.dataset.lbl === "loc" ? { code:S.locs[c.value].code, name:S.locs[c.value].name, sub:S.locs[c.value].area || "Place" } : { code:S.items[c.value].code, name:S.items[c.value].name, sub:S.items[c.value].category });
+    if (!chosen.length) return toast("Choose at least one label");
+    CFG.labelSize = $("#lb-size").value; saveCfg();
+    $("#lb-p").disabled = true;
+    try { await loadScript(QR_SRC); } catch(e){ $("#lb-p").disabled = false; return toast("The QR code maker couldn't load. Check your connection."); }
+    buildLabels(chosen, LABELS[CFG.labelSize]);
+    $("#lb-p").disabled = false;
+    setTimeout(() => window.print(), 100);
+  };
+}
+function buildLabels(list, L){
+  const rows = Math.floor((11 - 2 * L.top + L.gapY) / (L.h + L.gapY)), per = L.cols * rows;
+  let html = "";
+  for (let p = 0; p < list.length; p += per) {
+    html += `<div class="lblpage" style="padding:${L.top}in ${L.side}in;grid-template-columns:repeat(${L.cols},${L.w}in);grid-auto-rows:${L.h}in;column-gap:${L.gapX}in;row-gap:${L.gapY}in">` +
+      list.slice(p, p + per).map(x => `<div class="lbl ${L.border ? "bordered" : ""}">${qrSVG(x.code, L.qr)}<div class="t"><b style="font-size:${L.nameSize}pt">${esc(x.name)}</b><span class="c" style="font-size:${L.codeSize}pt">${esc(x.code)}</span><small style="font-size:${L.codeSize}pt">${esc(x.sub || "")}</small></div></div>`).join("") + `</div>`;
+  }
+  $("#printArea").innerHTML = html;
+}
+
+/* ---------- out ---------- */
+function renderOut(){
+  const items = Object.values(S.items).filter(i => isOut(i) || isAttn(i));
+  const groups = [
+    ["Loaned out", items.filter(i => i.status === "loaned").sort((a, b) => (isOverdue(b) - isOverdue(a)) || ((a.loan || {}).since || "").localeCompare((b.loan || {}).since || ""))],
+    ["Away from the garage", items.filter(i => i.status === "away")],
+    ["Needs repair", items.filter(i => i.status === "repair")],
+    ["Missing", items.filter(i => i.status === "missing")]
+  ].filter(g => g[1].length);
+  if (!groups.length) { $("#outList").innerHTML = `<div class="empty">Everything is in the garage.</div>`; return; }
+  const btn = { loaned:"Returned", away:"Back", repair:"Fixed", missing:"Found" };
+  $("#outList").innerHTML = groups.map(([title, list]) => `<h3>${esc(title)}</h3>` + list.map(i => {
+    let meta = "";
+    if (i.status === "loaned" && i.loan) meta = `<span>with <b>${esc(i.loan.to)}</b></span><span>${daysSince(i.loan.since)} days</span>${i.loan.due ? `<span>due ${fmtDate(i.loan.due)}</span>` : ""}`;
+    else if (i.status === "away" && i.away) meta = `<span>${esc(i.away.where)}</span><span>since ${fmtDate(i.away.since)}</span>`;
+    else meta = `<span>${esc(locName(i.locationId) || "No place")}</span>${i.notes ? `<span>${esc(i.notes)}</span>` : ""}`;
+    return `<div class="out" data-id="${esc(i.id)}"><button class="main" data-act="open"><div class="name">${esc(i.name)} ${isOverdue(i) ? `<span class="pill overdue">Overdue</span>` : ""}</div><div class="meta">${meta}</div></button><button class="btn sm ghost" data-act="back">${btn[i.status]}</button></div>`;
+  }).join("")).join("");
+}
+$("#outList").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const it = S.items[b.closest(".out").dataset.id]; if (!it) return;
+  if (b.dataset.act === "open") return openItem(it.id);
+  setStatus(it, "available"); toast(it.name + " is available");
+});
+
+/* ---------- shopping list ---------- */
+function renderList(){
+  const groups = {};
+  Object.values(S.items).filter(needsBuying).forEach(it => { const st = (isTool(it) ? (it.purchase || {}).store : it.store) || "Any store"; (groups[st] ||= []).push({ it }); });
+  Object.values(S.extras).forEach(x => (groups["Any store"] ||= []).push({ x }));
+  const keys = Object.keys(groups).sort((a, b) => a === "Any store" ? 1 : b === "Any store" ? -1 : a.localeCompare(b));
+  if (!keys.length) { $("#list").innerHTML = `<div class="empty">Nothing to buy. Supplies appear here when they drop to their low level, and tools when they go missing.</div>`; return; }
+  let total = 0;
+  $("#list").innerHTML = keys.map(k => `<div class="store">${esc(k)}</div>` + groups[k].map(({ it, x }) => {
+    if (x) return `<div class="li"><input type="checkbox" data-xdone="${esc(x.id)}" aria-label="Bought ${esc(x.name)}"><div class="main"><div class="name">${esc(x.name)}</div><div class="meta"><span>Added by hand</span></div></div><span></span></div>`;
+    const price = isTool(it) ? (it.purchase || {}).price : it.price; total += num(price);
+    const meta = isTool(it)
+      ? `<span>${esc(it.category)}</span>${it.brand ? `<span>${esc(it.brand)} ${esc(it.model || "")}</span>` : ""}${price ? `<span>~${money(price)}</span>` : ""}`
+      : `<span>Have ${esc(amtText(it).big)}${it.unit === "count" ? "" : " " + esc(it.unit)}</span><span>Buy ${esc(num(it.restock) || 1)}${it.unit === "count" ? "" : " " + esc(it.unit)}</span>${price ? `<span>~${money(price)}</span>` : ""}`;
+    const pill = isTool(it) ? `<span class="pill ${it.status === "missing" ? "missing" : "repair"}">${it.status === "missing" ? "Replace" : "Buy"}</span>` : `<span class="pill low">Low</span>`;
+    return `<div class="li"><input type="checkbox" data-bought="${esc(it.id)}" aria-label="Bought ${esc(it.name)}"><div class="main"><div class="name">${esc(it.name)}</div><div class="meta">${meta}</div></div>${pill}</div>`;
+  }).join("")).join("") + (total ? `<p class="hint" style="margin-top:14px">Estimated total: ${money(total)} for priced items.</p>` : "");
+}
+$("#list").addEventListener("change", e => {
+  const id = e.target.dataset.bought, xid = e.target.dataset.xdone;
+  if (id && S.items[id]) {
+    const it = S.items[id];
+    if (isTool(it)) { setStatus(it, "available"); toast(it.name + " is back in stock"); }
+    else { putItem({ ...it, amount: num(it.amount) + (num(it.restock) || 1) }); toast("Restocked " + it.name); }
+  }
+  if (xid) { delete S.extras[xid]; saveAll(); renderAll(); toast("Checked off"); }
+});
+function addExtra(){ const v = $("#extraName").value.trim(); if (!v) return; const x = { id:newId("x"), name:v, added:Date.now() }; S.extras[x.id] = x; saveAll(); renderAll(); $("#extraName").value = ""; }
+$("#extraAdd").onclick = addExtra;
+$("#extraName").addEventListener("keydown", e => { if (e.key === "Enter") addExtra(); });
+
+/* ---------- tabs ---------- */
+function showTab(t){
+  S.tab = t;
+  document.querySelectorAll("nav.tabs [data-tab]").forEach(x => x.toggleAttribute("aria-current", false));
+  document.querySelector(`nav.tabs [data-tab="${t}"]`).setAttribute("aria-current", "page");
+  ["garage","scan","places","out","list"].forEach(v => $("#v-" + v).hidden = v !== t);
+  if (t !== "scan") stopCam();
+  renderAll(); window.scrollTo(0, 0);
+}
+document.querySelector("nav.tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
+
+/* ---------- Claude (optional API key) ---------- */
+const loadedScripts = {};
+function loadScript(src){
+  return loadedScripts[src] ||= new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => { delete loadedScripts[src]; rej(new Error("Couldn't load " + src)); }; document.head.appendChild(s); });
+}
+async function toJpegB64(blob, max = 1600){
+  const bmp = await createImageBitmap(blob);
+  const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.85).split(",")[1];
+}
+function parseJSON(t){
+  try { return JSON.parse(t); } catch(e){}
+  const m = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (m) { try { return JSON.parse(m[1]); } catch(e){} }
+  const i = t.search(/[\[{]/), j = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+  return JSON.parse(t.slice(i, j + 1));
+}
+async function askClaude(prompt, images = []){
+  const content = [];
+  for (const b of images) content.push({ type:"image", source:{ type:"base64", media_type:"image/jpeg", data: await toJpegB64(b) } });
+  content.push({ type:"text", text: prompt });
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{ "content-type":"application/json", "x-api-key":CFG.apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+    body: JSON.stringify({ model: CFG.model || "claude-sonnet-5-5", max_tokens: 1500, messages:[{ role:"user", content }] })
+  });
+  if (!r.ok) throw new Error(r.status === 401 ? "Your Claude API key was rejected. Check it in Settings." : r.status === 429 ? "Claude is rate limiting requests. Wait a minute and try again." : "The Claude request failed (error " + r.status + ").");
+  const j = await r.json();
+  return parseJSON(j.content.map(c => c.text || "").join(""));
+}
+async function identifyPhoto(blob, code){
+  const r = await askClaude(
+`This photo shows a tool, piece of equipment or supply from a home garage: the item itself, its box, or its model/rating plate.
+${code ? "Its barcode was read as " + code + "." : "If a barcode is visible, read its digits."}
+Choose department and category ONLY from this list (format "Department > Category"):
+${TAX_LINES}
+Reply with only JSON:
+{"name": "short name a person would use, with size or voltage, e.g. 'M18 FUEL 1/2\\" hammer drill'", "brand": "brand or null", "model": "model number or null", "department": "...", "category": "...", "kind": "tool" or "supply", "platform": "battery platform such as 'Milwaukee M18', 'DeWalt 20V MAX', 'Ryobi ONE+', or null", "power": "cordless" | "corded" | "gas" | "pneumatic" | "manual", "unit": "for supplies: one of ${UNITS.join(", ")}; otherwise null", "barcode": "digits or null"}
+Use "supply" only for things that get used up (screws, blades, sandpaper, oil, tape). Use null for anything you cannot tell.`, [blob]);
+  if (!validCat(r.department, r.category)) { const g = guessCategory([r.name, r.category].join(" ")); if (g) Object.assign(r, { department: g.department, category: g.category }); }
+  return r;
+}
+
+/* ---------- product lookup for unknown barcodes ---------- */
+async function lookupProduct(code){
+  try {
+    const r = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+    if (r.ok) { const j = await r.json(); const p = j.items && j.items[0]; if (p && p.title) return { name:p.title, brand:p.brand || "", model:p.model || "", hint:p.category || "", source:"UPCitemdb" }; }
+  } catch(e){}
+  for (const host of ["world.openproductsfacts.org", "world.openfoodfacts.org"]) {
+    try {
+      const r = await fetch(`https://${host}/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,quantity`);
+      if (!r.ok) continue; const j = await r.json(); const p = j.product;
+      if (j.status === 1 && p && (p.product_name || p.brands)) { const brand = (p.brands || "").split(",")[0].trim(); return { name:[brand, p.product_name, p.quantity].filter(Boolean).join(" ").trim(), brand, model:"", hint:"", source:host.replace("world.", "") }; }
+    } catch(e){}
+  }
+  return null;
+}
+
+/* ---------- live camera scanning ---------- */
+const ZX = "https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js";
+const FORMATS = ["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf","qr_code"];
+let detector = null, zxReader = null, cam = null;
+const crop = document.createElement("canvas");
+async function getDetector(){
+  if (detector !== null) return detector;
+  detector = false;
+  try {
+    if ("BarcodeDetector" in window) {
+      const sup = await BarcodeDetector.getSupportedFormats();
+      const f = FORMATS.filter(x => sup.includes(x));
+      if (f.length) detector = new BarcodeDetector({ formats: f });
+    }
+  } catch(e){}
+  return detector;
+}
+async function getZX(){
+  if (zxReader) return zxReader;
+  await loadScript(ZX);
+  const F = ZXing.BarcodeFormat, hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.ITF, F.QR_CODE]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  zxReader = new ZXing.MultiFormatReader(); zxReader.setHints(hints);
+  return zxReader;
+}
+function zxDecode(canvas){
+  if (!zxReader) return null;
+  try { return zxReader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(canvas)))).getText(); }
+  catch(e){ return null; }
+  finally { try { zxReader.reset(); } catch(e){} }
+}
+async function readCanvas(canvas){
+  if (detector) { try { const r = await detector.detect(canvas); if (r[0] && r[0].rawValue) return { code: r[0].rawValue, sure: true }; } catch(e){} }
+  const z = zxDecode(canvas);
+  return z ? { code: z, sure: /^GS-(IT|LOC)-\d+$/.test(z) } : null;
+}
+async function startCam(){
+  if (cam) return;
+  $("#scanResult").innerHTML = "";
+  $("#scanStatus").textContent = "Starting camera…";
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error(), { name: "NoMedia" });
+    await Promise.all([getDetector(), getZX().catch(() => null)]);
+    if (!detector && !zxReader) throw Object.assign(new Error(), { name: "NoReader" });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1920 }, height:{ ideal:1080 } } });
+    const v = $("#video"); v.srcObject = stream;
+    try { await v.play(); } catch(e){}
+    const track = stream.getVideoTracks()[0];
+    cam = { stream, track, timer:null, busy:false, last:null, lastAt:0, torch:false, zoom:1, zoomCaps:null };
+    try {
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      if (caps.focusMode && caps.focusMode.includes("continuous")) await track.applyConstraints({ advanced:[{ focusMode:"continuous" }] });
+      $("#torchBtn").hidden = !caps.torch; $("#torchBtn").setAttribute("aria-pressed", "false");
+      cam.zoomCaps = caps.zoom && caps.zoom.max > 1 ? caps.zoom : null;
+      $("#zoomBtn").hidden = !cam.zoomCaps; $("#zoomBtn").textContent = "1×";
+    } catch(e){}
+    $("#viewer").classList.add("live"); $("#camBtn").textContent = "Stop camera";
+    $("#scanStatus").textContent = "Fill the box with the barcode or label, about a hand's width away." + ($("#torchBtn").hidden ? "" : " Tap Light in dim spots.");
+    scanLoop();
+  } catch(e) {
+    stopCam();
+    const n = e && e.name;
+    $("#scanStatus").textContent =
+      n === "NotAllowedError" ? "Camera access was blocked. Allow the camera for this site in your browser settings, or use a photo instead."
+      : n === "NotFoundError" || n === "OverconstrainedError" ? "No usable camera was found. Use a photo or type the number."
+      : n === "NoReader" ? "The barcode reader couldn't load. Check your connection and try again."
+      : location.protocol !== "https:" && location.hostname !== "localhost" ? "The camera only works when the site is opened over https."
+      : "The camera couldn't start. Try again, or use a photo instead.";
+  }
+}
+function cropAim(v){
+  const vw = v.videoWidth, vh = v.videoHeight;
+  const el = v.getBoundingClientRect(), A = el.width / el.height, B = vw / vh;
+  let visW = vw, visH = vh;
+  if (B > A) visW = vh * A; else visH = vw / A;
+  const cw = visW * 0.86, ch = visH * 0.52;
+  const sx = (vw - cw) / 2, sy = (vh - ch) / 2;
+  const scale = Math.max(1, Math.min(2.5, 1400 / cw));
+  crop.width = Math.round(cw * scale); crop.height = Math.round(ch * scale);
+  const ctx = crop.getContext("2d", { willReadFrequently: true });
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(v, sx, sy, cw, ch, 0, 0, crop.width, crop.height);
+  return crop;
+}
+async function scanLoop(){
+  if (!cam) return;
+  const v = $("#video");
+  if (v.videoWidth && !cam.busy) {
+    cam.busy = true;
+    try {
+      const hit = await readCanvas(cropAim(v));
+      if (hit && cam) {
+        if (hit.sure || (cam.last === hit.code && Date.now() - cam.lastAt < 2500)) { cam.busy = false; return found(hit.code); }
+        cam.last = hit.code; cam.lastAt = Date.now();
+      }
+    } catch(e){}
+    if (cam) cam.busy = false;
+  }
+  if (cam) cam.timer = setTimeout(scanLoop, detector ? 100 : 160);
+}
+function found(code){
+  const frame = grabFrame();
+  try { navigator.vibrate && navigator.vibrate(60); } catch(e){}
+  stopCam();
+  handleCode(code, frame);
+}
+function grabFrame(){
+  try {
+    const v = $("#video"); if (!v.videoWidth) return null;
+    const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    return new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.85));
+  } catch(e){ return null; }
+}
+function stopCam(){
+  if (cam) { clearTimeout(cam.timer); try { cam.stream.getTracks().forEach(t => t.stop()); } catch(e){} cam = null; }
+  const v = $("#video"); if (v) v.srcObject = null;
+  $("#viewer").classList.remove("live"); $("#camBtn").textContent = "Start camera";
+  $("#torchBtn").hidden = true; $("#zoomBtn").hidden = true;
+}
+$("#camBtn").onclick = () => cam ? (stopCam(), $("#scanStatus").textContent = "") : startCam();
+$("#torchBtn").onclick = async () => {
+  if (!cam) return;
+  try { await cam.track.applyConstraints({ advanced:[{ torch: !cam.torch }] }); cam.torch = !cam.torch; $("#torchBtn").setAttribute("aria-pressed", String(cam.torch)); }
+  catch(e){ toast("This camera's light can't be controlled from the browser."); }
+};
+$("#zoomBtn").onclick = async () => {
+  if (!cam || !cam.zoomCaps) return;
+  const steps = [1, 2, 3].map(z => Math.min(z, cam.zoomCaps.max)).filter((z, i, a) => a.indexOf(z) === i);
+  const next = steps[(steps.indexOf(cam.zoom) + 1) % steps.length] || 1;
+  try { await cam.track.applyConstraints({ advanced:[{ zoom: next }] }); cam.zoom = next; $("#zoomBtn").textContent = (+next.toFixed(1)) + "×"; } catch(e){}
+};
+document.addEventListener("visibilitychange", () => { if (document.hidden) stopCam(); });
+
+/* ---------- photo input on the Scan tab ---------- */
+async function decodeImage(file){
+  try {
+    await Promise.all([getDetector(), getZX().catch(() => null)]);
+    const bmp = await createImageBitmap(file);
+    const c = document.createElement("canvas"); const sc = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    c.width = Math.round(bmp.width * sc); c.height = Math.round(bmp.height * sc);
+    c.getContext("2d", { willReadFrequently: true }).drawImage(bmp, 0, 0, c.width, c.height);
+    const hit = await readCanvas(c); return hit ? hit.code : null;
+  } catch(e){ return null; }
+}
+$("#scanFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  stopCam(); $("#scanResult").innerHTML = ""; $("#scanStatus").textContent = "Looking for a barcode…";
+  const code = await decodeImage(file);
+  if (code) return handleCode(code, file);
+  $("#scanStatus").textContent = "No barcode found in that photo. Try a closer, sharper shot, or use Identify from photo.";
+});
+$("#idFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  stopCam(); $("#scanResult").innerHTML = "";
+  const code = await decodeImage(file);
+  if (code && (/^GS-(IT|LOC)-\d+$/i.test(code) || findByBarcode(code))) return handleCode(code, file);
+  if (!CFG.apiKey) {
+    $("#scanStatus").textContent = "Fill in the details below. To have tools identified from photos automatically, add a Claude API key in Settings.";
+    return editItem({ barcode: code || "", photoBlob: file }, true);
+  }
+  $("#scanStatus").textContent = "Asking Claude what this is…";
+  try {
+    const r = await identifyPhoto(file, code);
+    $("#scanStatus").textContent = "Identified. Check the details and add it.";
+    editItem(identityToItem(r, code, file), true);
+  } catch(err) {
+    $("#scanStatus").textContent = (err && err.message) || "Claude couldn't identify that photo.";
+    editItem({ barcode: code || "", photoBlob: file }, true);
+  }
+});
+function identityToItem(r, code, photo){
+  return { name: r.name || "", brand: r.brand || "", model: r.model || "", department: r.department, category: r.category, kind: r.kind === "supply" ? "supply" : "tool", kindLocked: true,
+    platform: r.platform || "", power: POWER[r.power] ? r.power : "", unit: UNITS.includes(r.unit) ? r.unit : "count", barcode: code || (r.barcode ? String(r.barcode).replace(/\D/g, "") : ""), photoBlob: photo };
+}
+$("#manualGo").onclick = () => { const v = $("#manualCode").value.trim(); if (v) { stopCam(); handleCode(/^gs-/i.test(v) ? v.toUpperCase() : v.replace(/\s/g, ""), null); } };
+$("#manualCode").addEventListener("keydown", e => { if (e.key === "Enter") $("#manualGo").click(); });
+
+const findByBarcode = code => Object.values(S.items).find(i => i.barcode && i.barcode.replace(/^0+/, "") === String(code).replace(/^0+/, ""));
+const findByCode = code => Object.values(S.items).find(i => i.code === code) || Object.values(S.locs).find(l => l.code === code);
+
+async function handleCode(code, frame){
+  $("#scanResult").innerHTML = "";
+  code = String(code).trim();
+  if (/^GS-(IT|LOC)-\d+$/i.test(code)) {
+    const hit = findByCode(code.toUpperCase());
+    $("#scanStatus").textContent = hit ? "" : `Label ${code} isn't in this garage. It may have been deleted, or printed on another device.`;
+    if (!hit) return;
+    return S.locs[hit.id] ? openLoc(hit.id) : openItem(hit.id);
+  }
+  const hit = findByBarcode(code);
+  if (hit) { $("#scanStatus").textContent = ""; return openItem(hit.id); }
+  $("#scanStatus").textContent = "New barcode " + code + ". Looking it up…";
+  const p = await lookupProduct(code);
+  const img = frame ? await frame : null;
+  if (p) {
+    $("#scanStatus").textContent = `Found on ${p.source}. Check the category and add it.`;
+    const g = guessCategory([p.name, p.hint].join(" "));
+    return editItem({ name: p.name, brand: p.brand, model: p.model, barcode: code, department: g ? g.department : "", category: g ? g.category : "", photoBlob: img || undefined }, true);
+  }
+  if (CFG.apiKey && img) {
+    $("#scanStatus").textContent = "Not in the product databases. Asking Claude to read the label…";
+    try { const r = await identifyPhoto(img, code); $("#scanStatus").textContent = "Identified. Check the details and add it."; return editItem(identityToItem(r, code, img), true); }
+    catch(err){ $("#scanStatus").textContent = (err && err.message) || "Claude couldn't read the label."; }
+  } else {
+    $("#scanStatus").textContent = `Barcode ${code} isn't in the free product databases. Type the name below.`;
+  }
+  editItem({ barcode: code, photoBlob: img || undefined }, true);
+}
+
+/* ---------- settings ---------- */
+function openSettings(){
+  openSheet(`<h2>Settings</h2>
+    <div class="form">
+      <label class="full">My battery platforms<input type="text" id="s-plat" value="${esc((CFG.platforms || []).join(", "))}" placeholder="e.g. Milwaukee M18, Ryobi ONE+"></label>
+      <p class="full hint" style="margin:0">Search a platform name on the Garage tab to see everything that runs on those batteries.</p>
+      <label class="full">Claude API key (optional)<input type="password" id="s-key" autocomplete="off" value="${esc(CFG.apiKey || "")}" placeholder="sk-ant-…"></label>
+      <label class="full">Claude model<select id="s-model">
+        <option value="claude-sonnet-5-5" ${(CFG.model || "claude-sonnet-5-5") === "claude-sonnet-5-5" ? "selected" : ""}>Sonnet 5.5 (best at identifying tools)</option>
+        <option value="claude-haiku-5-5" ${CFG.model === "claude-haiku-5-5" ? "selected" : ""}>Haiku 5.5 (faster, cheaper)</option></select></label>
+      <p class="full hint" style="margin:0">With a key, Claude identifies tools from a photo of the tool, box or model plate and files them in the right category. The key is stored only in this browser and sent only to Anthropic. Usage is billed to your API account (console.anthropic.com).</p>
+    </div>
+    <div class="row end" style="margin-top:12px"><button class="btn" id="s-save">Save</button></div>
+    <h3>Backup</h3>
+    <p class="hint" style="margin:0 0 10px">Everything is saved in this browser only. Export a backup to keep it safe or move it to another phone. Backups include photos.</p>
+    <div class="row"><button class="btn ghost" id="s-export">Export backup</button><label class="btn ghost" for="s-import">Import backup</label><input type="file" id="s-import" accept="application/json,.json" hidden></div>
+    <h3>Value</h3>
+    <p class="hint" id="s-value" style="margin:0"></p>
+    <div class="row end" style="margin-top:18px"><button class="btn ghost" id="s-close">Close</button></div>`);
+  const tools = Object.values(S.items).filter(isTool);
+  const val = tools.reduce((t, i) => t + num((i.purchase || {}).price) * (num(i.qty) || 1), 0);
+  const priced = tools.filter(i => (i.purchase || {}).price).length;
+  $("#s-value").textContent = `${tools.length} tools, ${money(val) || "$0.00"} in recorded purchase prices (${priced} of ${tools.length} have a price).`;
+  $("#s-close").onclick = closeSheet;
+  $("#s-save").onclick = () => {
+    CFG.platforms = $("#s-plat").value.split(",").map(s => s.trim()).filter(Boolean);
+    CFG.apiKey = $("#s-key").value.trim(); CFG.model = $("#s-model").value; saveCfg(); closeSheet();
+    toast(CFG.apiKey ? "Saved. Photo identification is on" : "Saved");
+  };
+  $("#s-export").onclick = async () => {
+    const data = { app:"garage-stock", version:1, exported:new Date().toISOString(), items:S.items, locs:S.locs, extras:S.extras, seq:S.seq, photos: await photoAll() };
+    const blob = new Blob([JSON.stringify(data)], { type:"application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "garage-stock-backup-" + today() + ".json";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+  $("#s-import").onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (d.app !== "garage-stock" || !d.items) throw 0;
+      Object.assign(S, { items:d.items, locs:d.locs || {}, extras:d.extras || {}, seq:d.seq || { it:0, loc:0 } });
+      for (const [id, v] of Object.entries(d.photos || {})) await photoPut(id, v);
+      saveAll(); renderAll(); closeSheet(); toast("Imported " + Object.keys(S.items).length + " items");
+    } catch(err){ toast("That file isn't a Garage Stock backup."); }
+  };
+}
+$("#settingsBtn").onclick = openSettings;
+
+/* ---------- toast & boot ---------- */
+let tt; function toast(m){ const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2800); }
+loadAll(); renderAll();
+const hashTab = location.hash.slice(1);
+if (["scan","places","out","list"].includes(hashTab)) showTab(hashTab);
+</script>
+</body>
+</html>
