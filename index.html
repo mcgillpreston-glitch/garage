@@ -23,7 +23,7 @@
   --accent:#a63d1c; --accent-ink:#ffffff; --accent-soft:#f3ddd3;
   --ok:#2e7a4c; --ok-soft:#d8eedf; --loan:#2f5f9e; --loan-soft:#dce6f5;
   --warn:#9a5d00; --warn-soft:#f8e8c8; --bad:#b3332a; --bad-soft:#f6dad6;
-  --tag:#f2c230; --tag-ink:#2a2100;
+  --tag:#f2c230; --tag-ink:#2a2100; --sugg:#fff4cc;
   --wall:#dcd8cf; --floor:#b8bbbe; --peg:#a77a4f; --peghole:rgba(40,25,10,.45); --wood:#b98450; --steel:#7f8890; --cab:#c9d0d7; --bin:#2f6db0; --bin2:#c0392b;
   --display:"Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
   --body:"Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -36,7 +36,7 @@
   --accent:#ec7f57; --accent-ink:#2a0d02; --accent-soft:#3b2219;
   --ok:#6cc58f; --ok-soft:#1b3326; --loan:#86aef0; --loan-soft:#1d2a40;
   --warn:#f0b04e; --warn-soft:#3a2b12; --bad:#f2847a; --bad-soft:#3d1d1a;
-  --tag:#e3b628; --tag-ink:#231b00;
+  --tag:#e3b628; --tag-ink:#231b00; --sugg:#3a3112;
   --wall:#2b2e33; --floor:#1d2023; --peg:#6e4f33; --peghole:rgba(0,0,0,.55); --wood:#8c6038; --steel:#59626b; --cab:#363d45; --bin:#2c5d93; --bin2:#9b3328; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121417; --surface:#1b1f24; --sunk:#232930; --line:#323a43;
@@ -44,7 +44,7 @@
   --accent:#ec7f57; --accent-ink:#2a0d02; --accent-soft:#3b2219;
   --ok:#6cc58f; --ok-soft:#1b3326; --loan:#86aef0; --loan-soft:#1d2a40;
   --warn:#f0b04e; --warn-soft:#3a2b12; --bad:#f2847a; --bad-soft:#3d1d1a;
-  --tag:#e3b628; --tag-ink:#231b00;
+  --tag:#e3b628; --tag-ink:#231b00; --sugg:#3a3112;
   --wall:#2b2e33; --floor:#1d2023; --peg:#6e4f33; --peghole:rgba(0,0,0,.55); --wood:#8c6038; --steel:#59626b; --cab:#363d45; --bin:#2c5d93; --bin2:#9b3328; color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -135,6 +135,18 @@ textarea{min-height:64px;resize:vertical}
 .viewer .aim{position:absolute;left:12%;right:12%;top:30%;bottom:30%;border:2px solid var(--tag);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.35);opacity:0}
 .viewer.live video,.viewer.live .aim{opacity:1}
 .viewer #camBtn{position:relative;z-index:2}
+.viewer .camstop{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:2;background:rgba(0,0,0,.6);color:#fff}
+.fillbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fillbar .btn{padding:13px 10px;font-size:15px}
+.form .fillbar label.btn{flex-direction:row;color:var(--ink)}
+.fillbar .btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;flex:none}
+.form label.sugg,.seg.sugg{position:relative}
+.form label.sugg input,.form label.sugg select{background:var(--sugg);border-color:var(--tag);box-shadow:0 0 0 1px var(--tag)}
+.seg.sugg{box-shadow:0 0 0 2px var(--tag)}
+.ignore{position:absolute;top:-1px;right:0;border:0;background:none;padding:0 2px;font-size:12px;font-weight:600;color:var(--accent);cursor:pointer}
+.seg.sugg .ignore{top:-20px}
+.suggbar{background:var(--sugg);border:1px solid var(--tag);border-radius:10px;padding:10px 12px;font-size:13px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;color:var(--ink)}
+.suggbar .grow{flex:1 1 200px}
 .viewer.live #camBtn{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff}
 .viewer .camnote{position:absolute;top:12px;left:12px;right:12px;text-align:center;color:#c9d0d6;font-size:13px}
 .viewer.live .camnote{display:none}
@@ -671,8 +683,8 @@ function rowHTML(it){
 }
 
 /* ---------- sheet ---------- */
-function openSheet(html){ $("#sheetCard").innerHTML = html; $("#sheet").hidden = false; $("#sheetCard").scrollTop = 0; fillPhotos($("#sheetCard")); }
-function closeSheet(){ $("#sheet").hidden = true; $("#sheetCard").innerHTML = ""; }
+function openSheet(html){ if (cam && cam.els.inSheet) stopCam(); $("#sheetCard").innerHTML = html; $("#sheet").hidden = false; $("#sheetCard").scrollTop = 0; fillPhotos($("#sheetCard")); }
+function closeSheet(){ if (cam && cam.els.inSheet) stopCam(); $("#sheet").hidden = true; $("#sheetCard").innerHTML = ""; }
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
 
@@ -720,7 +732,7 @@ function openItem(id){
   openSheet(`<div class="ihead">${photoBtnHTML(it, "a")}<div class="main"><span class="tag">${esc(it.code || "")}</span><h2>${esc(it.name)}</h2><div class="meta"><span>${esc(it.department)} › ${esc(it.category)}</span></div></div></div>
     <dl class="facts">${facts.join("")}</dl>
     <div class="actions">${actions}</div>
-    <div class="minor"><button class="link" data-a="move">Move</button><button class="link" data-a="edit">Edit</button><button class="link" data-a="label">Print label</button><button class="link" data-a="snap">${it.hasPhoto ? "Retake photo" : "Take photo"}</button>${replace}<button class="link" data-a="close" style="margin-left:auto">Close</button></div>`);
+    <div class="minor"><button class="link" data-a="move">Move</button><button class="link" data-a="edit">Edit</button><button class="link" data-a="fill">Scan to fill details</button><button class="link" data-a="label">Print label</button><button class="link" data-a="snap">${it.hasPhoto ? "Retake photo" : "Take photo"}</button>${replace}<button class="link" data-a="close" style="margin-left:auto">Close</button></div>`);
   $("#sheetCard").onclick = e => {
     const b = e.target.closest("[data-a]"); if (!b) return;
     const cur = S.items[id]; if (!cur) return;
@@ -728,6 +740,7 @@ function openItem(id){
     if (a === "close") return closeSheet();
     if (a === "edit") return editItem(cur, false);
     if (a === "move") return moveItem(cur);
+    if (a === "fill") return editItem(cur, false, { scan: true });
     if (a === "label") return openLabels({ items:[id] });
     if (a === "photo") return openPhoto(id);
     if (a === "snap") return takePhoto(id, () => openItem(id));
@@ -824,7 +837,9 @@ function platforms(){
   const set = new Set([...(CFG.platforms || []), ...Object.values(S.items).map(i => i.platform).filter(Boolean), ...DEFAULT_PLATFORMS]);
   return [...set];
 }
-function editItem(it, isNew){
+const BAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 8v8M11 8v8M13.5 8v8M16 8v8"/></svg>`;
+let lastFill = "";
+function editItem(it, isNew, auto){
   pendingPhoto = null;
   it = { kind:"tool", qty:1, status:"available", unit:"count", amount:1, threshold:1, restock:1, power:"", department:"", category:"", ...it };
   if (!it.department || !validCat(it.department, it.category)) {
@@ -838,12 +853,23 @@ function editItem(it, isNew){
   openSheet(`<h2>${isNew ? "Add to the garage" : "Edit " + esc(it.name)}</h2>
     <div class="form">
       <div class="full seg" role="group" aria-label="Kind"><button type="button" data-kind="tool" aria-pressed="${it.kind === "tool"}">Tool or equipment</button><button type="button" data-kind="supply" aria-pressed="${it.kind === "supply"}">Supply (gets used up)</button></div>
+      <div class="full fillbar">
+        <button type="button" class="btn" id="f-scan">${BAR_SVG}Scan barcode</button>
+        <label class="btn ghost" for="f-idfile">${CAM_SVG}Identify from photo</label>
+        <input type="file" id="f-idfile" accept="image/*" capture="environment" hidden>
+      </div>
+      <div class="full viewer" id="f-viewer" hidden>
+        <video id="f-video" playsinline muted autoplay></video>
+        <div class="aim" aria-hidden="true"></div>
+        <div class="camtools"><button type="button" class="camtool" id="f-torch" aria-pressed="false" hidden>Light</button><button type="button" class="camtool" id="f-zoom" hidden>1×</button></div>
+        <button type="button" class="btn camstop" id="f-camstop">Cancel scan</button>
+      </div>
+      <p class="full hint" id="f-msg" style="margin:0">${isNew ? `Scan the barcode or snap a photo to fill in the details${CFG.apiKey ? "" : ". Identifying from a photo needs a Claude API key in Settings; without one the photo is checked for a barcode"}.` : ""}</p>
+      <div class="full suggbar" id="f-sugg" hidden></div>
       <div class="full row" style="align-items:center">
         ${it.hasPhoto ? `<img id="f-photo" ${imgSrc(it)} alt="" style="width:64px;height:64px;border-radius:8px;object-fit:cover">` : `<img id="f-photo" alt="" hidden style="width:64px;height:64px;border-radius:8px;object-fit:cover">`}
         <label class="btn ghost sm" for="f-file">${it.hasPhoto ? "Change photo" : "Add photo"}</label><input type="file" id="f-file" accept="image/*" capture="environment" hidden>
-        <button type="button" class="btn ghost sm" id="f-ai" ${CFG.apiKey ? "" : "hidden"}>Identify from photo</button>
       </div>
-      <p class="full hint" id="f-msg" style="margin:0"></p>
       <label class="full">Name<input type="text" id="f-name" value="${esc(it.name || "")}" placeholder="e.g. 18V jigsaw, 3/8&quot; drive ratchet"></label>
       <label>Department<select id="f-dept">${deptOpts}</select></label>
       <label>Category<select id="f-cat"></select></label>
@@ -878,7 +904,7 @@ function editItem(it, isNew){
     </div>
     <div class="row between" style="margin-top:14px">
       <div>${isNew ? "" : `<button class="btn danger" id="f-del">Delete</button>`}</div>
-      <div class="row"><button class="btn ghost" id="f-cancel">Cancel</button><button class="btn" id="f-save">${isNew ? "Add" : "Save"}</button></div>
+      <div class="row"><button class="btn ghost" id="f-cancel">Cancel</button>${isNew ? `<button class="btn ghost" id="f-next">Save &amp; next</button>` : ""}<button class="btn" id="f-save">${isNew ? "Add" : "Save"}</button></div>
     </div>`);
 
   let kind = it.kind;
@@ -895,30 +921,119 @@ function editItem(it, isNew){
     try { pendingPhoto = { blob, thumb: await makeThumb(blob) }; $("#f-photo").src = pendingPhoto.thumb; $("#f-photo").hidden = false; }
     catch(e){ toast("That photo couldn't be opened."); }
   }
-  $("#f-ai").onclick = async () => {
-    if (!pendingPhoto) { $("#f-msg").textContent = "Add a photo of the tool, its box or its model plate first."; return; }
-    $("#f-msg").textContent = "Asking Claude…"; $("#f-ai").disabled = true;
-    try { const r = await identifyPhoto(pendingPhoto.blob, $("#f-barcode").value.trim()); applyIdentity(r); $("#f-msg").textContent = "Filled in from the photo. Check it before saving."; }
-    catch(err){ $("#f-msg").textContent = (err && err.message) || "Claude couldn't identify that photo."; }
-    $("#f-ai").disabled = false;
-  };
-  function applyIdentity(r){
-    if (r.name) $("#f-name").value = r.name;
-    if (r.brand) $("#f-brand").value = r.brand;
-    if (r.model) $("#f-model").value = r.model;
-    if (r.department && DEPTS.includes(r.department)) { $("#f-dept").value = r.department; fillCats(r.department, r.category); }
-    if (r.kind === "tool" || r.kind === "supply") setKind(r.kind);
-    if (r.platform) $("#f-platform").value = r.platform;
-    if (r.power && POWER[r.power]) $("#f-power").value = r.power;
-    if (r.unit && UNITS.includes(r.unit)) $("#f-unit").value = r.unit;
-    if (r.barcode && !$("#f-barcode").value) $("#f-barcode").value = String(r.barcode).replace(/\s/g, "");
+  /* ---- suggestions: filled fields are highlighted; keep, edit, or ignore each one ---- */
+  let suggs = [], suggSource = "";
+  const card = $("#sheetCard");
+  function updateBar(){
+    const bar = $("#f-sugg"); if (!bar) return;
+    bar.hidden = !suggs.length;
+    if (!suggs.length) return;
+    const n = new Set(suggs.map(x => x.box)).size;
+    bar.innerHTML = `<span class="grow"><b>${n} field${n === 1 ? "" : "s"} filled</b> from ${esc(suggSource)}. Keep them, edit them, or tap Ignore on any.</span><button type="button" class="link" data-sg="keep">Keep all</button><button type="button" class="link" data-sg="ignore">Ignore all</button>`;
   }
-  editItem.applyIdentity = applyIdentity;
+  function clearSugg(entry){
+    suggs = suggs.filter(e => e !== entry);
+    if (!suggs.some(e => e.box === entry.box)) { entry.box.classList.remove("sugg"); const x = entry.box.querySelector(":scope > .ignore"); if (x) x.remove(); }
+    updateBar();
+  }
+  function markSugg(box, revert, watch, evt = "input"){
+    if (!box) return;
+    if (suggs.some(e => e.box === box && e.revert === revert)) return;
+    const prior = suggs.find(e => e.box === box);
+    const entry = { box, revert: prior ? prior.revert : revert };
+    if (prior) suggs = suggs.filter(e => e !== prior);
+    box.classList.add("sugg");
+    let x = box.querySelector(":scope > .ignore");
+    if (!x) { x = document.createElement("button"); x.type = "button"; x.className = "ignore"; x.textContent = "Ignore"; box.appendChild(x); }
+    x.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); entry.revert(); suggs.filter(e => e.revert === entry.revert).forEach(clearSugg); };
+    if (watch) watch.addEventListener(evt, () => { if (suggs.includes(entry)) clearSugg(entry); }, { once:true });
+    suggs.push(entry);
+  }
+  card.onclick = e => {
+    const d = e.target.closest("[data-dup]"); if (d) return openItem(d.dataset.dup);
+    const b = e.target.closest("[data-sg]"); if (!b) return;
+    if (b.dataset.sg === "ignore") [...suggs].reverse().forEach(x => x.revert());
+    [...suggs].forEach(clearSugg);
+  };
+  function applySuggest(sug, source){
+    if (!$("#f-name")) return;
+    suggSource = source;
+    const set = (sel, val) => {
+      const el = $(sel); if (!el || val == null || val === "") return;
+      if (el.tagName === "SELECT" && ![...el.options].some(o => o.value === String(val))) return;
+      const prev = el.value; if (String(prev) === String(val)) return;
+      el.value = val;
+      markSugg(el.closest("label"), () => { el.value = prev; }, el, el.tagName === "SELECT" ? "change" : "input");
+    };
+    if (sug.kind && sug.kind !== kind) { const pk = kind; setKind(sug.kind); const seg = card.querySelector(".seg"); markSugg(seg, () => setKind(pk), seg, "click"); }
+    set("#f-name", sug.name); set("#f-brand", sug.brand); set("#f-model", sug.model);
+    if (sug.department && validCat(sug.department, sug.category) && ($("#f-dept").value !== sug.department || $("#f-cat").value !== sug.category)) {
+      const pd = $("#f-dept").value, pc = $("#f-cat").value;
+      $("#f-dept").value = sug.department; fillCats(sug.department, sug.category);
+      const rev = () => { $("#f-dept").value = pd; fillCats(pd, pc); };
+      markSugg($("#f-dept").closest("label"), rev, $("#f-dept"), "change");
+      markSugg($("#f-cat").closest("label"), rev, $("#f-cat"), "change");
+    }
+    set("#f-platform", sug.platform); set("#f-power", sug.power); set("#f-unit", sug.unit); set("#f-barcode", sug.barcode);
+    updateBar();
+  }
+  const msg = h => { if ($("#f-msg")) $("#f-msg").innerHTML = h; };
+  async function fillFromCode(code, frame){
+    lastFill = "scan";
+    code = String(code).trim();
+    if (/^GS-(IT|LOC)-\d+$/i.test(code)) return msg("That's one of your Garage Stock labels, not a product barcode. Scan the barcode on the tool or its box.");
+    const dup = findByBarcode(code);
+    const dupNote = dup && dup.id !== it.id ? `You already have <b>${esc(dup.name)}</b> with this barcode. <button type="button" class="link" data-dup="${esc(dup.id)}">Open it</button> · ` : "";
+    msg(dupNote + `Barcode <span class="mono">${esc(code)}</span>. Looking it up…`);
+    applySuggest({ barcode: code }, "the barcode");
+    const img = frame ? await frame : null;
+    const p = await lookupProduct(code);
+    if (!$("#f-name")) return;
+    if (p) {
+      const g = (p.hint && guessCategory(p.hint.split(">").pop())) || guessCategory([p.name, p.hint].join(" "));
+      let sug = { name: cleanTitle(p.name, p.brand, p.model), brand: p.brand, model: p.model, ...(g ? { department: g.department, category: g.category, kind: g.kind } : {}) }, source = p.source;
+      if (CFG.apiKey) {
+        msg(dupNote + `Found on ${esc(p.source)}. Asking Claude to tidy it up…`);
+        try { const c = await classifyTitle(p.name, p.hint); sug = { ...sug, ...Object.fromEntries(Object.entries(c).filter(([k, v]) => v)) }; source += " and Claude"; } catch(e){}
+      }
+      if (!$("#f-name")) return;
+      applySuggest(sug, source);
+      return msg(dupNote + `Found on ${esc(p.source)}.`);
+    }
+    if (CFG.apiKey && img) {
+      msg(dupNote + "Not in the product databases. Asking Claude to read the label…");
+      try { const r = await identifyPhoto(img, code); applySuggest(identityToSug(r, code), "Claude reading the label"); return msg(dupNote + "Read from the label by Claude."); }
+      catch(err){ return msg(dupNote + esc((err && err.message) || "Claude couldn't read the label.")); }
+    }
+    msg(dupNote + `Barcode <span class="mono">${esc(code)}</span> isn't in the free product databases. Type the name${CFG.apiKey ? ", or use Identify from photo" : ""}.`);
+  }
+  async function fillFromPhoto(file){
+    lastFill = "photo";
+    if (!pendingPhoto && !it.hasPhoto) usePhoto(file);
+    msg("Checking the photo…");
+    const code = await decodeImage(file);
+    if (CFG.apiKey) {
+      msg("Asking Claude what this is…");
+      try {
+        const r = await identifyPhoto(file, code);
+        if (!$("#f-name")) return;
+        applySuggest(identityToSug(r, code), "Claude (photo)");
+        return msg("Identified from the photo.");
+      } catch(err){ msg(esc((err && err.message) || "Claude couldn't identify that photo.")); }
+    }
+    if (code) return fillFromCode(code, null);
+    if (!CFG.apiKey) msg("No barcode found in that photo. To identify items from a picture, add a Claude API key in Settings.");
+  }
+  $("#f-scan").onclick = () => startCam(FORM_CAM, fillFromCode);
+  $("#f-camstop").onclick = () => { stopCam(); msg(""); };
+  $("#f-torch").onclick = toggleTorch;
+  $("#f-zoom").onclick = cycleZoom;
+  $("#f-idfile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) { stopCam(); fillFromPhoto(f); } };
 
   $("#f-cancel").onclick = () => isNew ? closeSheet() : openItem(it.id);
   if (!isNew) $("#f-del").onclick = () => { $("#f-del").textContent = "Tap again to delete"; $("#f-del").onclick = () => { const nm = it.name; dropItem(it.id); closeSheet(); toast("Deleted " + nm); }; };
-  $("#f-save").onclick = async () => {
-    const name = $("#f-name").value.trim(); if (!name) { $("#f-name").focus(); return toast("Give it a name"); }
+  async function doSave(){
+    const name = $("#f-name").value.trim(); if (!name) { $("#f-name").focus(); toast("Give it a name"); return null; }
     const n = { ...it, kind, name, department: $("#f-dept").value, category: $("#f-cat").value, brand: $("#f-brand").value.trim(), model: $("#f-model").value.trim(),
       locationId: resolveLoc("#f-loc", "#f-new"), barcode: $("#f-barcode").value.replace(/\s/g, ""), notes: $("#f-notes").value.trim() };
     delete n.photoBlob; delete n.kindLocked; delete n.example;
@@ -935,10 +1050,18 @@ function editItem(it, isNew){
     }
     if (isNew) { n.id = newId("it"); n.code = nextCode("it"); }
     if (pendingPhoto) { $("#f-save").disabled = true; Object.assign(n, await storePhoto(n.id, pendingPhoto.thumb, it.photoUrl)); }
+    stopCam();
     putItem(n); toast(isNew ? "Added " + n.name : "Saved");
-    openItem(n.id);
-  };
+    return n;
+  }
+  $("#f-save").onclick = async () => { const n = await doSave(); if (n) openItem(n.id); };
+  if (isNew) $("#f-next").onclick = async () => { const n = await doSave(); if (n) editItem({ locationId: n.locationId }, true, lastFill === "scan" ? { scan: true } : null); };
+
+  if (auto && auto.scan) startCam(FORM_CAM, fillFromCode);
+  else if (auto && auto.code) fillFromCode(auto.code, auto.frame);
+  else if (auto && auto.photo) fillFromPhoto(auto.photo);
 }
+
 $("#addBtn").onclick = () => editItem({ name: S.q.trim(), department: S.dept !== "All" ? S.dept : "", category: S.cat !== "All" ? S.cat : "" }, true);
 
 /* ---------- garage interactions ---------- */
@@ -1333,38 +1456,43 @@ async function readCanvas(canvas){
   const z = zxDecode(canvas);
   return z ? { code: z, sure: /^GS-(IT|LOC)-\d+$/.test(z) } : null;
 }
-async function startCam(){
-  if (cam) return;
-  $("#scanResult").innerHTML = "";
-  $("#scanStatus").textContent = "Starting camera…";
+const SCAN_TAB = { viewer:"#viewer", video:"#video", btn:"#camBtn", torch:"#torchBtn", zoom:"#zoomBtn", status:"#scanStatus", startText:"Start camera", stopText:"Stop camera" };
+const FORM_CAM = { viewer:"#f-viewer", video:"#f-video", btn:null, torch:"#f-torch", zoom:"#f-zoom", status:"#f-msg", show:true, inSheet:true };
+const el$ = sel => sel ? $(sel) : null;
+async function startCam(els = SCAN_TAB, onFound = handleCode){
+  if (cam) stopCam();
+  const st = t => { const n = el$(els.status); if (n) n.textContent = t; };
+  if (els === SCAN_TAB) $("#scanResult").innerHTML = "";
+  if (els.show && el$(els.viewer)) el$(els.viewer).hidden = false;
+  st("Starting camera…");
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error(), { name: "NoMedia" });
     await Promise.all([getDetector(), getZX().catch(() => null)]);
     if (!detector && !zxReader) throw Object.assign(new Error(), { name: "NoReader" });
     const stream = await navigator.mediaDevices.getUserMedia({ audio:false, video:{ facingMode:{ ideal:"environment" }, width:{ ideal:1920 }, height:{ ideal:1080 } } });
-    const v = $("#video"); v.srcObject = stream;
+    const v = el$(els.video); if (!v) { stream.getTracks().forEach(t => t.stop()); return; }
+    v.srcObject = stream;
     try { await v.play(); } catch(e){}
     const track = stream.getVideoTracks()[0];
-    cam = { stream, track, timer:null, busy:false, last:null, lastAt:0, torch:false, zoom:1, zoomCaps:null };
+    cam = { stream, track, timer:null, busy:false, last:null, lastAt:0, torch:false, zoom:1, zoomCaps:null, els, onFound };
     try {
       const caps = track.getCapabilities ? track.getCapabilities() : {};
       if (caps.focusMode && caps.focusMode.includes("continuous")) await track.applyConstraints({ advanced:[{ focusMode:"continuous" }] });
-      $("#torchBtn").hidden = !caps.torch; $("#torchBtn").setAttribute("aria-pressed", "false");
+      if (el$(els.torch)) { el$(els.torch).hidden = !caps.torch; el$(els.torch).setAttribute("aria-pressed", "false"); }
       cam.zoomCaps = caps.zoom && caps.zoom.max > 1 ? caps.zoom : null;
-      $("#zoomBtn").hidden = !cam.zoomCaps; $("#zoomBtn").textContent = "1×";
+      if (el$(els.zoom)) { el$(els.zoom).hidden = !cam.zoomCaps; el$(els.zoom).textContent = "1×"; }
     } catch(e){}
-    $("#viewer").classList.add("live"); $("#camBtn").textContent = "Stop camera";
-    $("#scanStatus").textContent = "Fill the box with the barcode or label, about a hand's width away." + ($("#torchBtn").hidden ? "" : " Tap Light in dim spots.");
+    el$(els.viewer).classList.add("live"); if (el$(els.btn)) el$(els.btn).textContent = els.stopText;
+    st("Fill the box with the barcode, about a hand's width away." + (el$(els.torch) && !el$(els.torch).hidden ? " Tap Light in dim spots." : ""));
     scanLoop();
   } catch(e) {
-    stopCam();
+    stopCam(els);
     const n = e && e.name;
-    $("#scanStatus").textContent =
-      n === "NotAllowedError" ? "Camera access was blocked. Allow the camera for this site in your browser settings, or use a photo instead."
+    st(n === "NotAllowedError" ? "Camera access was blocked. Allow the camera for this site in your browser settings, or use a photo instead."
       : n === "NotFoundError" || n === "OverconstrainedError" ? "No usable camera was found. Use a photo or type the number."
       : n === "NoReader" ? "The barcode reader couldn't load. Check your connection and try again."
       : location.protocol !== "https:" && location.hostname !== "localhost" ? "The camera only works when the site is opened over https."
-      : "The camera couldn't start. Try again, or use a photo instead.";
+      : "The camera couldn't start. Try again, or use a photo instead.");
   }
 }
 function cropAim(v){
@@ -1383,7 +1511,8 @@ function cropAim(v){
 }
 async function scanLoop(){
   if (!cam) return;
-  const v = $("#video");
+  const v = el$(cam.els.video);
+  if (!v) return stopCam();
   if (v.videoWidth && !cam.busy) {
     cam.busy = true;
     try {
@@ -1398,37 +1527,42 @@ async function scanLoop(){
   if (cam) cam.timer = setTimeout(scanLoop, detector ? 100 : 160);
 }
 function found(code){
-  const frame = grabFrame();
+  const frame = grabFrame(), cb = cam.onFound;
   try { navigator.vibrate && navigator.vibrate(60); } catch(e){}
   stopCam();
-  handleCode(code, frame);
+  cb(code, frame);
 }
 function grabFrame(){
   try {
-    const v = $("#video"); if (!v.videoWidth) return null;
+    const v = el$(cam.els.video); if (!v || !v.videoWidth) return null;
     const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext("2d").drawImage(v, 0, 0);
     return new Promise(res => c.toBlob(b => res(b), "image/jpeg", 0.85));
   } catch(e){ return null; }
 }
-function stopCam(){
+function stopCam(elsOverride){
+  const els = (cam && cam.els) || elsOverride || SCAN_TAB;
   if (cam) { clearTimeout(cam.timer); try { cam.stream.getTracks().forEach(t => t.stop()); } catch(e){} cam = null; }
-  const v = $("#video"); if (v) v.srcObject = null;
-  $("#viewer").classList.remove("live"); $("#camBtn").textContent = "Start camera";
-  $("#torchBtn").hidden = true; $("#zoomBtn").hidden = true;
+  const v = el$(els.video); if (v) v.srcObject = null;
+  const vw = el$(els.viewer); if (vw) { vw.classList.remove("live"); if (els.show) vw.hidden = true; }
+  if (el$(els.btn)) el$(els.btn).textContent = els.startText;
+  if (el$(els.torch)) el$(els.torch).hidden = true;
+  if (el$(els.zoom)) el$(els.zoom).hidden = true;
 }
-$("#camBtn").onclick = () => cam ? (stopCam(), $("#scanStatus").textContent = "") : startCam();
-$("#torchBtn").onclick = async () => {
+async function toggleTorch(){
   if (!cam) return;
-  try { await cam.track.applyConstraints({ advanced:[{ torch: !cam.torch }] }); cam.torch = !cam.torch; $("#torchBtn").setAttribute("aria-pressed", String(cam.torch)); }
+  try { await cam.track.applyConstraints({ advanced:[{ torch: !cam.torch }] }); cam.torch = !cam.torch; el$(cam.els.torch).setAttribute("aria-pressed", String(cam.torch)); }
   catch(e){ toast("This camera's light can't be controlled from the browser."); }
-};
-$("#zoomBtn").onclick = async () => {
+}
+async function cycleZoom(){
   if (!cam || !cam.zoomCaps) return;
   const steps = [1, 2, 3].map(z => Math.min(z, cam.zoomCaps.max)).filter((z, i, a) => a.indexOf(z) === i);
   const next = steps[(steps.indexOf(cam.zoom) + 1) % steps.length] || 1;
-  try { await cam.track.applyConstraints({ advanced:[{ zoom: next }] }); cam.zoom = next; $("#zoomBtn").textContent = (+next.toFixed(1)) + "×"; } catch(e){}
-};
+  try { await cam.track.applyConstraints({ advanced:[{ zoom: next }] }); cam.zoom = next; el$(cam.els.zoom).textContent = (+next.toFixed(1)) + "×"; } catch(e){}
+}
+$("#camBtn").onclick = () => cam ? (stopCam(), $("#scanStatus").textContent = "") : startCam(SCAN_TAB, handleCode);
+$("#torchBtn").onclick = toggleTorch;
+$("#zoomBtn").onclick = cycleZoom;
 document.addEventListener("visibilitychange", () => { if (document.hidden) stopCam(); });
 
 /* ---------- photo input on the Scan tab ---------- */
@@ -1451,26 +1585,33 @@ $("#scanFile").addEventListener("change", async e => {
 });
 $("#idFile").addEventListener("change", async e => {
   const file = e.target.files[0]; e.target.value = ""; if (!file) return;
-  stopCam(); $("#scanResult").innerHTML = "";
+  stopCam(); $("#scanResult").innerHTML = ""; $("#scanStatus").textContent = "";
   const code = await decodeImage(file);
   if (code && (/^GS-(IT|LOC)-\d+$/i.test(code) || findByBarcode(code))) return handleCode(code, file);
-  if (!CFG.apiKey) {
-    $("#scanStatus").textContent = "Fill in the details below. To have tools identified from photos automatically, add a Claude API key in Settings.";
-    return editItem({ barcode: code || "", photoBlob: file }, true);
-  }
-  $("#scanStatus").textContent = "Asking Claude what this is…";
-  try {
-    const r = await identifyPhoto(file, code);
-    $("#scanStatus").textContent = "Identified. Check the details and add it.";
-    editItem(identityToItem(r, code, file), true);
-  } catch(err) {
-    $("#scanStatus").textContent = (err && err.message) || "Claude couldn't identify that photo.";
-    editItem({ barcode: code || "", photoBlob: file }, true);
-  }
+  editItem({}, true, { photo: file });
 });
-function identityToItem(r, code, photo){
-  return { name: r.name || "", brand: r.brand || "", model: r.model || "", department: r.department, category: r.category, kind: r.kind === "supply" ? "supply" : "tool", kindLocked: true,
-    platform: r.platform || "", power: POWER[r.power] ? r.power : "", unit: UNITS.includes(r.unit) ? r.unit : "count", barcode: code || (r.barcode ? String(r.barcode).replace(/\D/g, "") : ""), photoBlob: photo };
+function identityToSug(r, code){
+  const out = { name: r.name || "", brand: r.brand || "", model: r.model || "", kind: r.kind === "supply" ? "supply" : r.kind === "tool" ? "tool" : "",
+    platform: r.platform || "", power: POWER[r.power] ? r.power : "", unit: UNITS.includes(r.unit) ? r.unit : "", barcode: code || (r.barcode ? String(r.barcode).replace(/\D/g, "") : "") };
+  if (validCat(r.department, r.category)) { out.department = r.department; out.category = r.category; }
+  return out;
+}
+/* Shortens a store listing title: drops brackets, the model number and filler words. */
+function cleanTitle(t, brand, model){
+  let s = String(t || "").replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
+  if (model) s = s.replace(new RegExp("\\b" + model.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "ig"), " ");
+  s = s.replace(/\b(tool only|bare tool|kit not included|battery not included|with case)\b/ig, " ").replace(/\s{2,}/g, " ").replace(/\s+,/g, ",").trim();
+  if (brand && s.toUpperCase().startsWith(brand.toUpperCase())) s = brand.charAt(0) + brand.slice(1).toLowerCase() + s.slice(brand.length);
+  return s.length > 70 ? s.slice(0, 70).replace(/\s+\S*$/, "") : s;
+}
+async function classifyTitle(title, hint){
+  const r = await askClaude(
+`A product barcode lookup returned this listing: "${title}"${hint ? ` (store category: ${hint})` : ""}.
+Turn it into a garage inventory entry. Choose department and category ONLY from this list (format "Department > Category"):
+${TAX_LINES}
+Reply with only JSON:
+{"name": "short name a person would use, with size or voltage", "brand": "brand or null", "model": "model number or null", "department": "...", "category": "...", "kind": "tool" or "supply", "platform": "battery platform such as 'Milwaukee M18', 'DeWalt 20V MAX', 'Ryobi ONE+', or null", "power": "cordless" | "corded" | "gas" | "pneumatic" | "manual", "unit": "for supplies: one of ${UNITS.join(", ")}; otherwise null"}`);
+  return identityToSug(r, "");
 }
 $("#manualGo").onclick = () => { const v = $("#manualCode").value.trim(); if (v) { stopCam(); handleCode(/^gs-/i.test(v) ? v.toUpperCase() : v.replace(/\s/g, ""), null); } };
 $("#manualCode").addEventListener("keydown", e => { if (e.key === "Enter") $("#manualGo").click(); });
@@ -1489,22 +1630,8 @@ async function handleCode(code, frame){
   }
   const hit = findByBarcode(code);
   if (hit) { $("#scanStatus").textContent = ""; return openItem(hit.id); }
-  $("#scanStatus").textContent = "New barcode " + code + ". Looking it up…";
-  const p = await lookupProduct(code);
-  const img = frame ? await frame : null;
-  if (p) {
-    $("#scanStatus").textContent = `Found on ${p.source}. Check the category and add it.`;
-    const g = guessCategory([p.name, p.hint].join(" "));
-    return editItem({ name: p.name, brand: p.brand, model: p.model, barcode: code, department: g ? g.department : "", category: g ? g.category : "", photoBlob: img || undefined }, true);
-  }
-  if (CFG.apiKey && img) {
-    $("#scanStatus").textContent = "Not in the product databases. Asking Claude to read the label…";
-    try { const r = await identifyPhoto(img, code); $("#scanStatus").textContent = "Identified. Check the details and add it."; return editItem(identityToItem(r, code, img), true); }
-    catch(err){ $("#scanStatus").textContent = (err && err.message) || "Claude couldn't read the label."; }
-  } else {
-    $("#scanStatus").textContent = `Barcode ${code} isn't in the free product databases. Type the name below.`;
-  }
-  editItem({ barcode: code, photoBlob: img || undefined }, true);
+  $("#scanStatus").textContent = "";
+  editItem({}, true, { code, frame });
 }
 
 /* ---------- settings ---------- */
