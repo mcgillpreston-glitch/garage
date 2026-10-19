@@ -1,0 +1,12 @@
+# Cloudflare Workers Builds deploys the storage worker from this repo on every push.
+# The garage app itself is served by GitHub Pages, not by this worker.
+name = "garage-photos"
+main = "cloudflare/worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "PHOTOS"
+id = "aebfca396b184b28a1d1fa1626bdc257"
+
+# Set the upload key once with:  npx wrangler secret put UPLOAD_KEY
