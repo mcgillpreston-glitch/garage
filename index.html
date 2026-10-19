@@ -90,6 +90,37 @@ textarea{min-height:64px;resize:vertical}
 .shelf{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .item{display:grid;grid-template-columns:60px 1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
 .item .main{min-width:0;border:0;background:none;padding:0;text-align:left}
+.catrow{display:flex;gap:10px;align-items:center}
+.catrow .chips{flex:1;min-width:0;margin-bottom:0}
+.catrow{margin-bottom:8px}
+.viewtoggle{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex:none}
+.viewtoggle button{border:0;background:var(--surface);padding:0 12px;font-size:13px;font-weight:600;color:var(--muted);min-height:34px}
+.viewtoggle button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.shelf.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;border-top:0}
+.tile{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:0;overflow:hidden;text-align:left;display:flex;flex-direction:column;min-width:0;position:relative}
+.tile .pic{aspect-ratio:1;width:100%;max-width:100%;background:var(--sunk);display:grid;place-items:center;overflow:hidden}
+.tile .pic img{width:100%;height:100%;object-fit:cover}
+.tile .pic span{font-family:var(--display);font-weight:800;font-size:28px;color:var(--muted)}
+.tile.gone .pic img,.tile.gone .pic span{opacity:.45;filter:grayscale(1)}
+.tile .tn{padding:6px 8px 2px;font-size:13px;font-weight:600;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.4em}
+.tile .ta{padding:0 8px 8px;font-size:12px;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tile .tb{position:absolute;top:6px;left:6px;right:6px}
+.tile .tb .pill{font-size:10px;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.gallery{position:fixed;inset:0;z-index:25;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.gbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px))}
+.gbar .count{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.gtrack{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.gtrack::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always;display:flex;flex-direction:column;gap:10px;padding:0 max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px));min-width:0;overflow-y:auto}
+.slide .big{flex:1;min-height:200px;max-height:62vh;background:var(--sunk);border-radius:14px;display:grid;place-items:center;overflow:hidden}
+.slide .big img{width:100%;height:100%;object-fit:contain}
+.slide .big span{font-family:var(--display);font-weight:800;font-size:64px;color:var(--muted)}
+.slide h2{margin:0}
+.gnav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-size:22px;display:none;place-items:center;z-index:2}
+@media (hover:hover) and (min-width:640px){.gnav{display:grid}}
+.gnav.prev{left:12px}.gnav.next{right:12px}
+.item.flash{animation:flash 1.6s ease-out}
+@keyframes flash{0%,40%{background:var(--accent-soft)}100%{background:transparent}}
 .thumb{width:60px;height:60px;border-radius:8px;object-fit:cover;background:var(--sunk);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden}
 .name{font-weight:600;overflow-wrap:anywhere;line-height:1.25}
 .meta{font-size:12px;color:var(--muted);display:flex;gap:2px 8px;flex-wrap:wrap;margin-top:2px}
@@ -274,7 +305,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
       <input type="search" id="q" placeholder="Do I have a… (10mm socket, jigsaw blades)" aria-label="Search the garage">
       <button class="btn ghost" id="mapBtn">Map</button><button class="btn" id="addBtn" aria-label="Add item">Add</button>
     </div>
-    <div class="chips" id="depts"></div>
+    <div class="catrow"><div class="chips" id="depts"></div><div class="viewtoggle" role="group" aria-label="View"><button id="vw-list" aria-pressed="true">List</button><button id="vw-tiles" aria-pressed="false">Pictures</button></div></div>
     <div class="chips cats" id="cats" hidden></div>
     <div class="answer" id="answer"></div>
     <div class="shelf" id="shelf"></div>
@@ -353,6 +384,11 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 </div></nav>
 
 <div class="sheet" id="sheet" hidden><div class="card" id="sheetCard" role="dialog" aria-modal="true"></div></div>
+<div class="gallery" id="gallery" hidden role="dialog" aria-modal="true" aria-label="Item pictures">
+  <div class="gbar"><button class="link" id="g-close">‹ Back</button><span class="count" id="g-count"></span><span style="width:48px"></span></div>
+  <button class="gnav prev" id="g-prev" aria-label="Previous item">‹</button><button class="gnav next" id="g-next" aria-label="Next item">›</button>
+  <div class="gtrack" id="g-track"></div>
+</div>
 <div class="toast" id="toast" hidden></div>
 <div id="printArea"></div>
 <input type="file" id="rowPhoto" accept="image/*" capture="environment" hidden>
@@ -652,7 +688,10 @@ function renderGarage(){
       : `<b>Not found.</b> Nothing in the garage matches “${esc(S.q.trim())}”. <button class="link" data-act="addFromSearch">Add it</button>`;
   } else $("#answer").innerHTML = "";
 
-  $("#shelf").innerHTML = list.length ? list.map(rowHTML).join("") :
+  S.shown = list.map(i => i.id);
+  $("#shelf").classList.toggle("tiles", S.view === "tiles");
+  $("#vw-list").setAttribute("aria-pressed", String(S.view !== "tiles")); $("#vw-tiles").setAttribute("aria-pressed", String(S.view === "tiles"));
+  $("#shelf").innerHTML = list.length ? list.map(S.view === "tiles" ? pictureTileHTML : rowHTML).join("") :
     S.q.trim() ? "" : `<div class="empty">${items.length ? "Nothing matches these filters." : "The garage is empty. Tap Add, or scan a tool's barcode to start."}</div>`;
   $("#exampleNote").hidden = !items.some(i => i.example) && !Object.values(S.locs).some(l => l.example);
   fillPhotos($("#shelf"));
@@ -1065,7 +1104,85 @@ function editItem(it, isNew, auto){
 $("#addBtn").onclick = () => editItem({ name: S.q.trim(), department: S.dept !== "All" ? S.dept : "", category: S.cat !== "All" ? S.cat : "" }, true);
 
 /* ---------- garage interactions ---------- */
+/* ---------- picture tiles & gallery ---------- */
+const VIEW_KEY = "garagestock.view";
+try { S.view = localStorage.getItem(VIEW_KEY) === "tiles" ? "tiles" : "list"; } catch(e){ S.view = "list"; }
+function setView(v){ S.view = v; try { localStorage.setItem(VIEW_KEY, v); } catch(e){} renderGarage(); }
+$("#vw-list").onclick = () => setView("list");
+$("#vw-tiles").onclick = () => setView("tiles");
+const picHTML = it => it.hasPhoto ? `<img ${imgSrc(it)} alt="" loading="lazy">` : `<span aria-hidden="true">${esc(initials(it.category || it.name))}</span>`;
+function statusBadge(it){
+  if (isTool(it)) return isOverdue(it) ? `<span class="pill overdue">Overdue</span>` : it.status && it.status !== "available" ? `<span class="pill ${it.status}">${STATUS[it.status]}</span>` : "";
+  return isLow(it) ? `<span class="pill low">Low</span>` : "";
+}
+function tileSub(it){
+  if (!isTool(it)) { const a = amtText(it); return `${a.big} ${a.small}`; }
+  if (it.status === "loaned" && it.loan) return "With " + it.loan.to;
+  return locName(it.locationId) || it.category;
+}
+function pictureTileHTML(it){
+  const gone = isTool(it) && it.status && it.status !== "available";
+  return `<button class="tile ${gone ? "gone" : ""}" data-tile="${esc(it.id)}" aria-label="${esc(it.name)}">
+    <div class="pic">${picHTML(it)}</div><span class="tb">${statusBadge(it)}</span>
+    <div class="tn">${esc(it.name)}</div><div class="ta">${esc(tileSub(it))}</div></button>`;
+}
+function slideHTML(it){
+  const loc = locName(it.locationId);
+  const bits = [isTool(it) ? (num(it.qty) > 1 ? "×" + num(it.qty) : "") : `<b>${esc(amtText(it).big)}</b> ${esc(amtText(it).small)}`,
+    statusBadge(it) || (isTool(it) ? `<span class="pill available">Available</span>` : ""),
+    esc(it.department + " › " + it.category), loc ? "📍 " + esc(loc) : "", esc([it.brand, it.model].filter(Boolean).join(" ")), esc(it.platform || "")].filter(Boolean);
+  const loanLine = it.status === "loaned" && it.loan ? `<p class="hint" style="margin:4px 0 0">With ${esc(it.loan.to)} since ${fmtDate(it.loan.since)}${it.loan.due ? `, due ${fmtDate(it.loan.due)}` : ""}</p>` : "";
+  return `<section class="slide" data-slide="${esc(it.id)}">
+    <div class="big">${picHTML(it)}</div>
+    <div><h2>${esc(it.name)}</h2><div class="meta">${bits.map(b => `<span>${b}</span>`).join("")}</div>${loanLine}</div>
+    <div class="row">
+      ${isTool(it) ? "" : STEP_UNITS.has(it.unit) ? `<button class="btn ghost" data-g="dec">Used one</button><button class="btn ghost" data-g="inc">Added one</button>` : ""}
+      <button class="btn ghost" data-g="snap">${it.hasPhoto ? "Retake photo" : "Take photo"}</button>
+      <button class="btn" data-g="open">Open item</button>
+      <button class="link" data-g="list">Show in list</button>
+    </div></section>`;
+}
+let gIds = [];
+function openGallery(id){
+  gIds = (S.shown || []).filter(x => S.items[x]);
+  if (!gIds.length) return;
+  $("#g-track").innerHTML = gIds.map(x => slideHTML(S.items[x])).join("");
+  fillPhotos($("#g-track"));
+  $("#gallery").hidden = false; document.body.style.overflow = "hidden";
+  const i = Math.max(0, gIds.indexOf(id)), tr = $("#g-track");
+  tr.scrollLeft = i * tr.clientWidth;
+  gCount();
+}
+const gIndex = () => { const tr = $("#g-track"); return Math.round(tr.scrollLeft / Math.max(1, tr.clientWidth)); };
+function gCount(){ $("#g-count").textContent = `${gIndex() + 1} / ${gIds.length}`; }
+function gGo(d){ const tr = $("#g-track"); const i = Math.min(gIds.length - 1, Math.max(0, gIndex() + d)); tr.scrollTo({ left: i * tr.clientWidth, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
+function closeGallery(){ $("#gallery").hidden = true; $("#g-track").innerHTML = ""; document.body.style.overflow = ""; }
+function refreshSlide(id){ const sl = document.querySelector(`#g-track [data-slide="${CSS.escape(id)}"]`); if (sl && S.items[id]) { sl.outerHTML = slideHTML(S.items[id]); fillPhotos($("#g-track")); } }
+$("#g-track").addEventListener("scroll", () => gCount(), { passive: true });
+$("#g-prev").onclick = () => gGo(-1); $("#g-next").onclick = () => gGo(1);
+$("#g-close").onclick = closeGallery;
+document.addEventListener("keydown", e => {
+  if ($("#gallery").hidden || !$("#sheet").hidden) return;
+  if (e.key === "ArrowRight") gGo(1); else if (e.key === "ArrowLeft") gGo(-1); else if (e.key === "Escape") closeGallery();
+});
+$("#g-track").addEventListener("click", e => {
+  const b = e.target.closest("[data-g]"); if (!b) return;
+  const id = b.closest("[data-slide]").dataset.slide, it = S.items[id]; if (!it) return;
+  const a = b.dataset.g;
+  if (a === "open") { closeGallery(); return openItem(id); }
+  if (a === "snap") return takePhoto(id, () => refreshSlide(id));
+  if (a === "list") {
+    closeGallery(); setView("list");
+    const row = document.querySelector(`#shelf .item[data-id="${CSS.escape(id)}"]`);
+    if (row) { row.scrollIntoView({ block: "center" }); row.classList.add("flash"); setTimeout(() => row.classList.remove("flash"), 1600); }
+    return;
+  }
+  const n = { ...it, amount: Math.max(0, num(it.amount) + (a === "inc" ? 1 : -1)) }; delete n.example;
+  putItem(n); lowToast(it, n); refreshSlide(id);
+});
+
 $("#shelf").addEventListener("click", e => {
+  const t = e.target.closest("[data-tile]"); if (t) return openGallery(t.dataset.tile);
   const b = e.target.closest("[data-act]"); if (!b) return;
   const id = b.closest(".item").dataset.id, it = S.items[id]; if (!it) return;
   const a = b.dataset.act;
