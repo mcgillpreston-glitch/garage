@@ -555,7 +555,7 @@ function fillPhotos(root){
 /* ---------- online photo storage (Cloudflare Worker + KV) ---------- */
 const cloudOn = () => !!(cloudBase() && CFG.cloudKey);
 /* Address of the Cloudflare storage worker. Not secret: nothing can be read or changed there without the household key, which is never in this code. */
-const BUILT_IN_CLOUD = "";
+const BUILT_IN_CLOUD = "https://garage-photos.prestonmcgill.workers.dev";
 const cloudBase = () => String(CFG.cloudUrl || BUILT_IN_CLOUD).trim().replace(/\/+$/, "");
 /* Online photos are private: the key goes along with each picture request. */
 const privSrc = u => u && CFG.cloudKey && cloudBase() && u.startsWith(cloudBase() + "/photos/") ? u + (u.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(CFG.cloudKey) : u;
