@@ -195,6 +195,15 @@ textarea{min-height:64px;resize:vertical}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .actions .full{grid-column:1/-1}
 .minor{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:14px}
+.fluids{display:flex;flex-direction:column;gap:8px}
+.fluid{border:1px solid var(--line);border-left:4px solid var(--ok);background:var(--surface);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.fluid.refill{border-left-color:var(--warn)} .fluid.buy{border-left-color:var(--bad)}
+.fluid .fh{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+.fluid .fh .pill{margin-left:auto}
+.fbar{height:8px;border-radius:4px;background:var(--sunk);overflow:hidden}
+.fbar i{display:block;height:100%;background:var(--ok);border-radius:4px}
+.fluid.refill .fbar i{background:var(--warn)} .fluid.buy .fbar i{background:var(--bad)}
+.fline{margin:0;font-size:13px}
 
 .loc{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);width:100%;border-left:0;border-right:0;border-top:0;background:none;text-align:left}
 .loc .count{font-family:var(--display);font-weight:700;font-size:20px;font-variant-numeric:tabular-nums}
@@ -678,7 +687,7 @@ function renderAll(){
 }
 function renderBadges(){
   const items = Object.values(S.items);
-  const out = items.filter(isOut).length, buy = items.filter(needsBuying).length + Object.keys(S.extras).length;
+  const out = items.filter(isOut).length, buy = items.filter(needsBuying).length + fluidListLines().length + Object.keys(S.extras).length;
   $("#outBadge").hidden = !out; $("#outBadge").textContent = out;
   $("#listBadge").hidden = !buy; $("#listBadge").textContent = buy;
 }
@@ -738,7 +747,7 @@ function rowHTML(it){
     ${photoBtnHTML(it)}
     <button class="main" data-act="open">
       <div class="name">${esc(it.name)}${it.example ? ` <span class="pill ex">Example</span>` : ""}</div>
-      <div class="meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}${it.status === "loaned" && it.loan ? `<span>with ${esc(it.loan.to)}</span>` : ""}</div>
+      <div class="meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}${it.status === "loaned" && it.loan ? `<span>with ${esc(it.loan.to)}</span>` : ""}${lowFluids(it).map(f => `<span class="pill ${fluidState(f).state === "buy" ? "missing" : "repair"}">${fluidState(f).state === "buy" ? "Buy" : "Refill"} ${esc(fluidName(f).toLowerCase())}</span>`).join("")}</div>
     </button>
     ${right}
   </div>`;
@@ -749,6 +758,190 @@ function openSheet(html){ if (cam && cam.els.inSheet) stopCam(); $("#sheetCard")
 function closeSheet(){ if (cam && cam.els.inSheet) stopCam(); $("#sheet").hidden = true; $("#sheetCard").innerHTML = ""; }
 $("#sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
+
+/* ---------- fluids & oils on tools ----------
+   A tool can list what it runs on (bar oil, fuel mix, engine oil…), how big the tank is and how full it is,
+   linked to the supply on the shelf. Each fluid then says: fine / refill from what you have / needs buying. */
+const FLUID_TYPES = [
+  { id:"bar",     name:"Bar & chain oil",   re:/bar\s*(?:&|and)?\s*chain|bar\s*oil|chain\s*oil/i,                      dept:"Lubricants & Chemicals", cat:"2-Stroke & Bar Oil" },
+  { id:"mix",     name:"2-stroke fuel mix", re:/(?:2|two)[\s-]*(?:stroke|cycle|cyc).*(?:fuel|mix)|pre-?mix|trufuel|\b(?:50|40|32):1\b/i, dept:"Lubricants & Chemicals", cat:"2-Stroke & Bar Oil" },
+  { id:"2oil",    name:"2-stroke oil",      re:/(?:2|two)[\s-]*(?:stroke|cycle|cyc).*oil/i,                           dept:"Lubricants & Chemicals", cat:"2-Stroke & Bar Oil" },
+  { id:"gas",     name:"Gasoline",          re:/\bgas(?:oline)?\b|unleaded|petrol|ethanol-free/i,                     dept:"Automotive", cat:"Fluids" },
+  { id:"diesel",  name:"Diesel",            re:/diesel/i,                                                             dept:"Automotive", cat:"Fluids" },
+  { id:"engine",  name:"Engine oil",        re:/\bsae\b|\b\d+w-?\d+\b|engine\s*oil|motor\s*oil|(?:4|four)[\s-]*(?:stroke|cycle)\s*oil|small engine oil/i, dept:"Automotive", cat:"Motor Oil" },
+  { id:"hyd",     name:"Hydraulic fluid",   re:/hydraulic/i,                                                          dept:"Automotive", cat:"Fluids" },
+  { id:"comp",    name:"Compressor oil",    re:/compressor\s*oil/i,                                                   dept:"Automotive", cat:"Fluids" },
+  { id:"airtool", name:"Air tool oil",      re:/air\s*tool\s*oil|pneumatic\s*(?:tool\s*)?oil/i,                       dept:"Automotive", cat:"Fluids" },
+  { id:"pump",    name:"Pump oil",          re:/pump\s*oil|pressure\s*washer\s*oil/i,                                 dept:"Automotive", cat:"Fluids" },
+  { id:"grease",  name:"Grease",            re:/grease/i,                                                             dept:"Lubricants & Chemicals", cat:"Grease" },
+  { id:"coolant", name:"Coolant",           re:/coolant|antifreeze/i,                                                 dept:"Automotive", cat:"Fluids" },
+  { id:"stab",    name:"Fuel stabilizer",   re:/stabil/i,                                                             dept:"Lubricants & Chemicals", cat:"Fuel Stabilizer" },
+  { id:"other",   name:"Other fluid",       re:null,                                                                   dept:"Automotive", cat:"Fluids" }
+];
+const ftype = id => FLUID_TYPES.find(t => t.id === id) || FLUID_TYPES[FLUID_TYPES.length - 1];
+const fluidName = f => f.type === "other" && f.spec ? f.spec : ftype(f.type).name;
+/* Volume units, in millilitres. */
+const VOL = { ml:1, L:1000, oz:29.5735, qt:946.353, gal:3785.41 };
+const CAP_UNITS = ["oz", "ml", "qt", "L", "gal"];
+const LEVELS = [[0, "Empty"], [0.25, "¼"], [0.5, "½"], [0.75, "¾"], [1, "Full"]];
+const levelText = l => { const n = LEVELS.reduce((b, x) => Math.abs(x[0] - l) < Math.abs(b[0] - l) ? x : b); return n[1]; };
+const LOW_LEVEL = 0.25;
+/* What a tool probably needs, from its category and power source. */
+function suggestFluids(it){
+  const c = it.category || "", gas = it.power === "gas", out = [];
+  if (/chainsaw/i.test(c) || /chain\s*saw/i.test(it.name || "")) out.push("bar");
+  if (gas && /chainsaw|string trimmer|leaf blower|hedge trimmer/i.test(c)) out.push("mix");
+  if (gas && /lawn mower|generator|pressure washer|snow blower/i.test(c)) out.push("gas", "engine");
+  if (/pressure washer/i.test(c) && gas) out.push("pump");
+  if (/air compressor/i.test(c)) out.push("comp");
+  if (/air tools/i.test(c)) out.push("airtool");
+  if (/jacks/i.test(c)) out.push("hyd");
+  return [...new Set(out)].filter(t => !(it.fluids || []).some(f => f.type === t));
+}
+/* The supply this fluid comes from: the one you linked, or one whose name matches the fluid type. */
+function fluidSupply(f){
+  if (f.supplyId && S.items[f.supplyId]) return S.items[f.supplyId];
+  const t = ftype(f.type); if (!t.re) return null;
+  const cands = Object.values(S.items).filter(i => !isTool(i) && t.re.test(i.name));
+  const words = String(f.spec || "").toLowerCase().split(/[^a-z0-9:]+/).filter(w => w.length > 1);
+  return cands.sort((a, b) => words.filter(w => b.name.toLowerCase().includes(w)).length - words.filter(w => a.name.toLowerCase().includes(w)).length || num(b.amount) - num(a.amount))[0] || null;
+}
+function fluidState(f){
+  const sup = fluidSupply(f), have = !!sup && num(sup.amount) > 0;
+  const low = num(f.level) <= LOW_LEVEL;
+  return { sup, have, low, state: !low ? "ok" : have ? "refill" : "buy" };
+}
+const lowFluids = it => isTool(it) ? (it.fluids || []).filter(f => fluidState(f).low) : [];
+const supplyText = sup => `${esc(sup.name)} (${esc(amtText(sup).big)}${sup.unit === "count" ? " left" : " " + esc(sup.unit)}${locName(sup.locationId) ? " · " + esc(locName(sup.locationId)) : ""})`;
+function fluidCardHTML(it, f){
+  const st = fluidState(f), pct = Math.round(Math.max(0, Math.min(1, num(f.level))) * 100);
+  const line = st.state === "ok"
+    ? (st.sup ? `<span class="hint">Spare: ${supplyText(st.sup)}</span>` : `<span class="hint">No spare in the garage yet.</span>`)
+    : st.state === "refill"
+      ? `<b>Refill now</b> from ${supplyText(st.sup)}`
+      : `<b>Needs buying.</b> ${st.sup ? `${esc(st.sup.name)} is empty` : `None in the garage`}, so it's on your shopping list.`;
+  return `<div class="fluid ${st.state}" data-f="${esc(f.id)}">
+    <div class="fh"><b>${esc(fluidName(f))}</b>${f.spec && f.type !== "other" ? `<span class="hint">${esc(f.spec)}</span>` : ""}${f.cap ? `<span class="hint">· tank ${esc(f.cap)} ${esc(f.unit || "oz")}</span>` : ""}
+      <span class="pill ${st.state === "ok" ? "available" : st.state === "refill" ? "repair" : "missing"}">${st.state === "ok" ? levelText(num(f.level)) : st.state === "refill" ? "Refill" : "Buy"}</span></div>
+    <div class="fbar" role="img" aria-label="${pct}% full"><i style="width:${pct}%"></i></div>
+    <p class="fline">${line}${f.filled ? ` <span class="hint">· last filled ${fmtDate(f.filled)}</span>` : ""}</p>
+    <div class="row"><button class="btn sm" data-a="fl-refill" data-f="${esc(f.id)}">Refilled</button><button class="btn ghost sm" data-a="fl-level" data-f="${esc(f.id)}">Set level</button><button class="link" data-a="fl-edit" data-f="${esc(f.id)}">Edit</button></div>
+  </div>`;
+}
+function fluidsSectionHTML(it){
+  if (!isTool(it)) {
+    const users = Object.values(S.items).filter(t => isTool(t) && (t.fluids || []).some(f => fluidSupply(f)?.id === it.id));
+    return users.length ? `<p class="hint" style="margin:-6px 0 12px">Used by: ${users.map(u => `<button class="link" data-a="goto" data-f="${esc(u.id)}">${esc(u.name)}</button>`).join(", ")}</p>` : "";
+  }
+  const fl = it.fluids || [], sug = suggestFluids(it);
+  if (!fl.length && !sug.length && !/gas|pneumatic/.test(it.power || "")) return `<p style="margin:0 0 12px"><button class="link" data-a="fl-add">+ Add a fuel or oil this tool needs</button></p>`;
+  return `<h3 style="margin-top:4px">Fuel &amp; oils</h3>
+    <div class="fluids">${fl.map(f => fluidCardHTML(it, f)).join("")}</div>
+    ${sug.length ? `<p class="hint" style="margin:8px 0 0">Probably needs: ${sug.map(t => `<button class="chip" data-a="fl-add" data-f="${t}">+ ${esc(ftype(t).name)}</button>`).join(" ")}</p>` : ""}
+    <p style="margin:8px 0 12px"><button class="link" data-a="fl-add">+ Add a fuel or oil</button></p>`;
+}
+function saveFluid(itemId, f){
+  const it = S.items[itemId]; if (!it) return;
+  const list = [...(it.fluids || [])], i = list.findIndex(x => x.id === f.id);
+  if (i >= 0) list[i] = f; else list.push(f);
+  putItem({ ...it, fluids: list });
+}
+function supplyOptions(f){
+  const t = ftype(f.type), sups = Object.values(S.items).filter(i => !isTool(i));
+  const rank = i => (t.re && t.re.test(i.name) ? 0 : 1);
+  return `<option value="">Automatic${fluidSupply({ ...f, supplyId:"" }) ? ` (${esc(fluidSupply({ ...f, supplyId:"" }).name)})` : " (none matches yet)"}</option>` +
+    sups.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).map(i => `<option value="${esc(i.id)}" ${i.id === f.supplyId ? "selected" : ""}>${esc(i.name)}</option>`).join("") +
+    `<option value="__new">+ New supply item for this fluid</option>`;
+}
+function createSupplyFor(f, store){
+  const t = ftype(f.type);
+  const n = { id:newId("it"), code:nextCode("it"), kind:"supply", name: fluidName(f) + (f.spec && f.type !== "other" ? " " + f.spec : ""), department:t.dept, category:t.cat,
+    unit: f.unit === "gal" ? "gal" : f.unit === "qt" ? "qt" : "bottle", amount:0, threshold:0, restock:1, store: store || "" };
+  putItem(n); return n.id;
+}
+function editFluid(itemId, fluidId, presetType){
+  const it = S.items[itemId]; if (!it) return;
+  const f = (it.fluids || []).find(x => x.id === fluidId) || { id:newId("fl"), type: presetType || suggestFluids(it)[0] || "bar", spec:"", cap:"", unit:"oz", level:1, supplyId:"" };
+  const isNew = !(it.fluids || []).some(x => x.id === f.id);
+  openSheet(`<h2>${isNew ? "Add fuel or oil" : "Edit " + esc(fluidName(f))}</h2><p class="lede">${esc(it.name)}</p>
+    <div class="form">
+      <label>What it takes<select id="fl-type">${FLUID_TYPES.map(t => `<option value="${t.id}" ${t.id === f.type ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
+      <label>Grade or mix<input type="text" id="fl-spec" value="${esc(f.spec || "")}" placeholder="e.g. 50:1, SAE 30, ISO 46"></label>
+      <label>Tank size<input type="number" id="fl-cap" min="0" step="any" inputmode="decimal" value="${esc(f.cap || "")}" placeholder="optional"></label>
+      <label>Unit<select id="fl-unit">${CAP_UNITS.map(u => `<option ${u === (f.unit || "oz") ? "selected" : ""}>${u}</option>`).join("")}</select></label>
+      <div class="full"><span class="hint">How full is it now?</span><div class="chips" style="flex-wrap:wrap;margin-top:4px">${LEVELS.map(([v, l]) => `<button type="button" class="chip" data-lv="${v}" aria-pressed="${Math.abs(num(f.level) - v) < 0.13}">${l}</button>`).join("")}</div></div>
+      <label class="full">Refill from (supply in your garage)<select id="fl-sup">${supplyOptions(f)}</select></label>
+      <p class="full hint" style="margin:0">Automatic finds a supply whose name matches, like “Oregon bar &amp; chain oil”. Pick one to link it for sure.</p>
+    </div>
+    <div class="row between" style="margin-top:14px"><div>${isNew ? "" : `<button class="btn danger" id="fl-del">Remove</button>`}</div><div class="row"><button class="btn ghost" id="fl-c">Cancel</button><button class="btn" id="fl-s">Save</button></div></div>`);
+  let level = num(f.level);
+  $("#sheetCard").querySelectorAll("[data-lv]").forEach(b => b.onclick = () => { level = +b.dataset.lv; $("#sheetCard").querySelectorAll("[data-lv]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); });
+  $("#fl-type").onchange = () => { $("#fl-sup").innerHTML = supplyOptions({ ...f, type: $("#fl-type").value, supplyId: "" }); };
+  $("#fl-c").onclick = () => openItem(itemId);
+  if (!isNew) $("#fl-del").onclick = () => { putItem({ ...S.items[itemId], fluids: (S.items[itemId].fluids || []).filter(x => x.id !== f.id) }); openItem(itemId); };
+  $("#fl-s").onclick = () => {
+    const n = { ...f, type: $("#fl-type").value, spec: $("#fl-spec").value.trim(), cap: $("#fl-cap").value === "" ? "" : num($("#fl-cap").value), unit: $("#fl-unit").value, level, supplyId: $("#fl-sup").value };
+    if (n.supplyId === "__new") n.supplyId = createSupplyFor(n, (it.purchase || {}).store);
+    saveFluid(itemId, n);
+    const st = fluidState(n); toast(st.state === "buy" ? `${fluidName(n)} added to the shopping list` : "Saved");
+    openItem(itemId);
+  };
+}
+function setFluidLevel(itemId, fluidId){
+  const it = S.items[itemId], f = (it.fluids || []).find(x => x.id === fluidId); if (!f) return;
+  openSheet(`<h2>${esc(fluidName(f))}</h2><p class="lede">How full is the ${esc(it.name)} now?</p>
+    <div class="chips" style="flex-wrap:wrap">${LEVELS.map(([v, l]) => `<button class="chip" data-lv="${v}" aria-pressed="${Math.abs(num(f.level) - v) < 0.13}">${l}</button>`).join("")}</div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="lv-c">Cancel</button></div>`);
+  $("#sheetCard").querySelectorAll("[data-lv]").forEach(b => b.onclick = () => {
+    const n = { ...f, level: +b.dataset.lv }; saveFluid(itemId, n);
+    const st = fluidState(n); toast(st.state === "refill" ? `Low: refill from ${st.sup.name}` : st.state === "buy" ? `${fluidName(n)} added to the shopping list` : "Updated");
+    openItem(itemId);
+  });
+  $("#lv-c").onclick = () => openItem(itemId);
+}
+function refillFluid(itemId, fluidId){
+  const it = S.items[itemId], f = (it.fluids || []).find(x => x.id === fluidId); if (!f) return;
+  const st = fluidState(f), sups = Object.values(S.items).filter(i => !isTool(i));
+  const defSup = st.sup ? st.sup.id : "";
+  const usedFor = (supId, target) => {
+    const sup = S.items[supId]; if (!sup || !f.cap) return 0;
+    const ml = num(f.cap) * (VOL[f.unit] || VOL.oz) * Math.max(0, target - num(f.level));
+    return VOL[sup.unit] ? +(ml / VOL[sup.unit]).toFixed(2) : 0;
+  };
+  openSheet(`<h2>Refill ${esc(fluidName(f))}</h2><p class="lede">${esc(it.name)} · now ${levelText(num(f.level))}${f.cap ? ` of ${esc(f.cap)} ${esc(f.unit)}` : ""}</p>
+    <div class="form">
+      <div class="full"><span class="hint">Filled to</span><div class="chips" style="flex-wrap:wrap;margin-top:4px">${LEVELS.slice(1).map(([v, l]) => `<button type="button" class="chip" data-lv="${v}" aria-pressed="${v === 1}">${l}</button>`).join("")}</div></div>
+      <label class="full">Taken from<select id="rf-sup"><option value="">Nothing from the garage (bought or filled elsewhere)</option>${sups.map(i => `<option value="${esc(i.id)}" ${i.id === defSup ? "selected" : ""}>${esc(i.name)} (${esc(amtText(i).big)} ${esc(i.unit === "count" ? "left" : i.unit)})</option>`).join("")}</select></label>
+      <label class="full" id="rf-usedbox">Used from it<input type="number" id="rf-used" min="0" step="any" inputmode="decimal"></label>
+      <p class="full hint" id="rf-hint" style="margin:0"></p>
+    </div>
+    <div class="row end" style="margin-top:14px"><button class="btn ghost" id="rf-c">Cancel</button><button class="btn" id="rf-s">Save</button></div>`);
+  let target = 1;
+  const upd = () => {
+    const sup = S.items[$("#rf-sup").value];
+    $("#rf-usedbox").hidden = !sup;
+    if (!sup) { $("#rf-hint").textContent = ""; return; }
+    const u = usedFor(sup.id, target);
+    $("#rf-used").value = u || ($("#rf-used").value && !VOL[sup.unit] ? $("#rf-used").value : 0);
+    $("#rf-hint").textContent = VOL[sup.unit] ? (f.cap ? `Worked out from the tank size, in ${sup.unit}. Change it if you used more or less.` : `Add the tank size to this fluid and this is worked out for you.`)
+      : `${sup.name} is counted in ${sup.unit === "count" ? "units" : sup.unit + "s"}: enter 1 if you finished one, or 0 if there's still some left.`;
+  };
+  $("#sheetCard").querySelectorAll("[data-lv]").forEach(b => b.onclick = () => { target = +b.dataset.lv; $("#sheetCard").querySelectorAll("[data-lv]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); upd(); });
+  $("#rf-sup").onchange = upd; upd();
+  $("#rf-c").onclick = () => openItem(itemId);
+  $("#rf-s").onclick = () => {
+    const supId = $("#rf-sup").value, used = num($("#rf-used").value);
+    if (supId && S.items[supId] && used > 0) { const sup = S.items[supId]; const n = { ...sup, amount: Math.max(0, +(num(sup.amount) - used).toFixed(2)) }; putItem(n); lowToast(sup, n); }
+    saveFluid(itemId, { ...f, level: target, filled: today(), supplyId: f.supplyId || supId || "" });
+    toast(`${fluidName(f)} refilled`); openItem(itemId);
+  };
+}
+/* Fluids with nothing to refill from go on the shopping list (supplies that are linked but low are already there). */
+function fluidListLines(){
+  const out = [];
+  for (const it of Object.values(S.items)) for (const f of lowFluids(it)) { const st = fluidState(f); if (st.state === "buy" && !st.sup) out.push({ it, f }); }
+  return out;
+}
 
 /* ---------- item detail ---------- */
 function openItem(id){
@@ -793,6 +986,7 @@ function openItem(id){
   const replace = isTool(it) && it.status !== "missing" ? `<button class="link" data-a="replace">${it.replace ? "Remove from shopping list" : "Add to shopping list"}</button>` : "";
   openSheet(`<div class="ihead">${photoBtnHTML(it, "a")}<div class="main"><span class="tag">${esc(it.code || "")}</span><h2>${esc(it.name)}</h2><div class="meta"><span>${esc(it.department)} › ${esc(it.category)}</span></div></div></div>
     <dl class="facts">${facts.join("")}</dl>
+    ${fluidsSectionHTML(it)}
     <div class="actions">${actions}</div>
     <div class="minor"><button class="link" data-a="move">Move</button><button class="link" data-a="edit">Edit</button><button class="link" data-a="fill">Scan to fill details</button><button class="link" data-a="label">Print label</button><button class="link" data-a="snap">${it.hasPhoto ? "Retake photo" : "Take photo"}</button>${replace}<button class="link" data-a="close" style="margin-left:auto">Close</button></div>`);
   $("#sheetCard").onclick = e => {
@@ -803,6 +997,11 @@ function openItem(id){
     if (a === "edit") return editItem(cur, false);
     if (a === "move") return moveItem(cur);
     if (a === "fill") return editItem(cur, false, { scan: true });
+    if (a === "fl-add") return editFluid(id, null, b.dataset.f);
+    if (a === "fl-edit") return editFluid(id, b.dataset.f);
+    if (a === "fl-level") return setFluidLevel(id, b.dataset.f);
+    if (a === "fl-refill") return refillFluid(id, b.dataset.f);
+    if (a === "goto") return openItem(b.dataset.f);
     if (a === "label") return openLabels({ items:[id] });
     if (a === "photo") return openPhoto(id);
     if (a === "snap") return takePhoto(id, () => openItem(id));
@@ -1135,7 +1334,7 @@ $("#vw-list").onclick = () => setView("list");
 $("#vw-tiles").onclick = () => setView("tiles");
 const picHTML = it => it.hasPhoto ? `<img ${imgSrc(it)} alt="" loading="lazy">` : `<span aria-hidden="true">${esc(initials(it.category || it.name))}</span>`;
 function statusBadge(it){
-  if (isTool(it)) return isOverdue(it) ? `<span class="pill overdue">Overdue</span>` : it.status && it.status !== "available" ? `<span class="pill ${it.status}">${STATUS[it.status]}</span>` : "";
+  if (isTool(it)) { const lf = lowFluids(it)[0]; return isOverdue(it) ? `<span class="pill overdue">Overdue</span>` : it.status && it.status !== "available" ? `<span class="pill ${it.status}">${STATUS[it.status]}</span>` : lf ? `<span class="pill repair">${esc(fluidName(lf))}</span>` : ""; }
   return isLow(it) ? `<span class="pill low">Low</span>` : "";
 }
 function tileSub(it){
@@ -1462,10 +1661,12 @@ function renderList(){
   const groups = {};
   Object.values(S.items).filter(needsBuying).forEach(it => { const st = (isTool(it) ? (it.purchase || {}).store : it.store) || "Any store"; (groups[st] ||= []).push({ it }); });
   Object.values(S.extras).forEach(x => (groups["Any store"] ||= []).push({ x }));
+  fluidListLines().forEach(({ it, f }) => (groups[(it.purchase || {}).store || "Any store"] ||= []).push({ fl: f, tool: it }));
   const keys = Object.keys(groups).sort((a, b) => a === "Any store" ? 1 : b === "Any store" ? -1 : a.localeCompare(b));
   if (!keys.length) { $("#list").innerHTML = `<div class="empty">Nothing to buy. Supplies appear here when they drop to their low level, and tools when they go missing.</div>`; return; }
   let total = 0;
-  $("#list").innerHTML = keys.map(k => `<div class="store">${esc(k)}</div>` + groups[k].map(({ it, x }) => {
+  $("#list").innerHTML = keys.map(k => `<div class="store">${esc(k)}</div>` + groups[k].map(({ it, x, fl, tool }) => {
+    if (fl) return `<div class="li"><input type="checkbox" data-fbuy="${esc(tool.id)}|${esc(fl.id)}" aria-label="Bought ${esc(fluidName(fl))}"><div class="main"><div class="name">${esc(fluidName(fl))}${fl.spec && fl.type !== "other" ? " " + esc(fl.spec) : ""}</div><div class="meta"><span>For ${esc(tool.name)}</span>${fl.cap ? `<span>tank ${esc(fl.cap)} ${esc(fl.unit)}</span>` : ""}</div></div><span class="pill missing">Buy</span></div>`;
     if (x) return `<div class="li"><input type="checkbox" data-xdone="${esc(x.id)}" aria-label="Bought ${esc(x.name)}"><div class="main"><div class="name">${esc(x.name)}</div><div class="meta"><span>Added by hand</span></div></div><span></span></div>`;
     const price = isTool(it) ? (it.purchase || {}).price : it.price; total += num(price);
     const meta = isTool(it)
@@ -1483,6 +1684,14 @@ $("#list").addEventListener("change", e => {
     else { putItem({ ...it, amount: num(it.amount) + (num(it.restock) || 1) }); toast("Restocked " + it.name); }
   }
   if (xid) { delete S.extras[xid]; saveAll(); renderAll(); toast("Checked off"); }
+  const fb = e.target.dataset.fbuy;
+  if (fb) {
+    const [tid, fid] = fb.split("|"), tool = S.items[tid], f = tool && (tool.fluids || []).find(x => x.id === fid); if (!f) return;
+    const supId = createSupplyFor(f, (tool.purchase || {}).store);
+    putItem({ ...S.items[supId], amount: 1 });
+    saveFluid(tid, { ...f, supplyId: supId });
+    toast(`${fluidName(f)} added to your supplies and linked to ${tool.name}. Tap Refilled on the tool when you top it up.`);
+  }
 });
 function addExtra(){ const v = $("#extraName").value.trim(); if (!v) return; const x = { id:newId("x"), name:v, added:Date.now() }; S.extras[x.id] = x; saveAll(); renderAll(); $("#extraName").value = ""; }
 $("#extraAdd").onclick = addExtra;
