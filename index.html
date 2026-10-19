@@ -553,9 +553,13 @@ function fillPhotos(root){
   (root || document).querySelectorAll("img[data-photo]:not([src])").forEach(async img => { const v = await photoGet(img.dataset.photo); if (v) img.src = v; });
 }
 /* ---------- online photo storage (Cloudflare Worker + KV) ---------- */
-const cloudOn = () => !!(CFG.cloudUrl && CFG.cloudKey);
-const cloudBase = () => String(CFG.cloudUrl || "").trim().replace(/\/+$/, "");
-const imgSrc = it => it.photoUrl ? `src="${esc(it.photoUrl)}"` : `data-photo="${esc(it.id)}"`;
+const cloudOn = () => !!(cloudBase() && CFG.cloudKey);
+/* Address of the Cloudflare storage worker. Not secret: nothing can be read or changed there without the household key, which is never in this code. */
+const BUILT_IN_CLOUD = "";
+const cloudBase = () => String(CFG.cloudUrl || BUILT_IN_CLOUD).trim().replace(/\/+$/, "");
+/* Online photos are private: the key goes along with each picture request. */
+const privSrc = u => u && CFG.cloudKey && cloudBase() && u.startsWith(cloudBase() + "/photos/") ? u + (u.includes("?") ? "&" : "?") + "k=" + encodeURIComponent(CFG.cloudKey) : u;
+const imgSrc = it => it.photoUrl ? `src="${esc(privSrc(it.photoUrl))}"` : `data-photo="${esc(it.id)}"`;
 function dataUrlToBlob(d){ const b = atob(d.split(",")[1]); const a = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Blob([a], { type:"image/jpeg" }); }
 async function cloudPut(key, blob){
   let r;
@@ -623,7 +627,7 @@ function openPhoto(id){
   const it = S.items[id]; if (!it) return;
   openSheet(`<h2>${esc(it.name)}</h2><div class="meta"><span>${esc(it.category)}</span>${locName(it.locationId) ? `<span>${esc(locName(it.locationId))}</span>` : ""}</div>
     <img class="bigphoto" ${imgSrc(it)} alt="${esc(it.name)}">
-    ${it.photoUrl ? `<p class="hint" style="margin:-6px 0 12px">Stored online. <button class="link" data-a="copy">Copy photo link</button></p>` : cloudOn() ? `<p class="hint" style="margin:-6px 0 12px">Stored on this phone only.</p>` : ""}
+    ${it.photoUrl ? `<p class="hint" style="margin:-6px 0 12px">Stored online, visible only in this app.</p>` : cloudOn() ? `<p class="hint" style="margin:-6px 0 12px">Stored on this phone only.</p>` : ""}
     <div class="actions"><button class="btn" data-a="retake">Retake photo</button><button class="btn ghost" data-a="item">Open item</button></div>
     <div class="minor"><button class="link" data-a="remove" style="color:var(--bad)">Remove photo</button><button class="link" data-a="close" style="margin-left:auto">Close</button></div>`);
   $("#sheetCard").onclick = async e => {
@@ -1999,7 +2003,7 @@ function openSettings(){
     <h3>Online storage &amp; sync</h3>
     <p class="hint" style="margin:0 0 10px">Connect your Cloudflare storage and your garage and photos live online: open the app on any phone, tablet or computer and you see the same items and places, kept in step automatically. Use the same storage link and key as Home Stock.</p>
     <div class="form">
-      <label class="full">Storage link<input type="url" id="s-curl" value="${esc(CFG.cloudUrl || "")}" placeholder="https://garage-photos.yourname.workers.dev"></label>
+      <label class="full">Storage link<input type="url" id="s-curl" value="${esc(cloudBase())}" placeholder="https://garage-photos.yourname.workers.dev"></label>
       <label class="full">Upload key<input type="password" id="s-ckey" autocomplete="off" value="${esc(CFG.cloudKey || "")}" placeholder="gs_…"></label>
     </div>
     <div class="row" style="margin-top:10px"><button class="btn ghost" id="s-ctest">Test connection</button><button class="btn ghost" id="s-cup" hidden>Upload photos on this phone</button></div>
@@ -2169,12 +2173,35 @@ async function uploadPhotosQuietly(){
   try { const r = await uploadLocalPhotos(); if (r.done) toast(`${r.done} photo${r.done === 1 ? "" : "s"} moved online`); } catch(e){}
 }
 
+
+/* ---------- private list: unlock a new device once ---------- */
+function unlockSheet(){
+  openSheet(`<h2>This list is private</h2>
+    <p class="hint" style="margin:0 0 12px">Open the invite link from a device that's already set up (Settings → Copy link for another device), or enter the household key once. This device remembers it.</p>
+    <label class="full"><span>Household key</span><input type="password" id="u-key" autocomplete="off" placeholder="gs_…"></label>
+    <p class="hint" id="u-msg" style="min-height:1.2em"></p>
+    <div class="actions"><button class="btn" id="u-go">Unlock</button><button class="btn ghost" id="u-local">Use on this device only</button></div>`);
+  $("#u-local").onclick = () => { CFG.localOnly = true; saveCfg(); closeSheet(); };
+  $("#u-go").onclick = async () => {
+    const key = $("#u-key").value.trim(); if (!key) return;
+    $("#u-msg").textContent = "Checking…";
+    try {
+      const j = await (await fetch(cloudBase() + "/ping", { headers: { "Authorization": "Bearer " + key } })).json();
+      if (!j.auth) { $("#u-msg").textContent = "That key isn't right."; return; }
+      CFG.cloudKey = key; CFG.sync = true; delete CFG.localOnly; saveCfg(); SYNC.everSynced = false; SYNC.version = 0; saveSyncMeta();
+      closeSheet(); await syncNow(); toast("Unlocked. This device now shows the shared list.");
+    } catch(e){ $("#u-msg").textContent = "Couldn't reach online storage. Check the internet connection."; }
+  };
+}
+const needsUnlock = () => !!BUILT_IN_CLOUD && !CFG.cloudKey && !CFG.localOnly;
+
 /* ---------- toast & boot ---------- */
 let tt; function toast(m){ const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2800); }
 const joinedByLink = readConnectLink();
 loadAll(); renderAll();
 setSyncStatus(syncOn() ? "syncing" : "off");
 setTimeout(async () => { await syncNow(); if (joinedByLink && SYNC.everSynced) toast("Connected. This device now shows your shared garage."); uploadPhotosQuietly(); }, 200);
+if (needsUnlock()) unlockSheet();
 const hashTab = location.hash.slice(1);
 if (["scan","places","out","list","map"].includes(hashTab)) showTab(hashTab);
 </script>

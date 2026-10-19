@@ -3,7 +3,7 @@
 // Secret:    UPLOAD_KEY (the same key you paste into the apps' Settings)
 //
 // Photos
-//   GET    /photos/<key>  -> the photo (public link, cached for a year)
+//   GET    /photos/<key>?k=<upload key>  -> the photo (private: needs the key, as ?k= or the Authorization header)
 //   PUT    /photos/<key>  -> store a JPEG/PNG/WebP (needs the key)
 //   DELETE /photos/<key>  -> remove it (needs the key)
 // Synced app data (needs the key)
@@ -35,6 +35,8 @@ function authorized(req, env) {
   const h = req.headers.get("Authorization") || "";
   return !!env.UPLOAD_KEY && h === "Bearer " + env.UPLOAD_KEY;
 }
+// Image tags can't send headers, so photos also accept the key in the address.
+const photoAllowed = (req, env, url) => authorized(req, env) || (!!env.UPLOAD_KEY && url.searchParams.get("k") === env.UPLOAD_KEY);
 
 export default {
   async fetch(req, env) {
@@ -74,10 +76,11 @@ export default {
     const key = m[1];
 
     if (req.method === "GET" || req.method === "HEAD") {
+      if (!photoAllowed(req, env, url)) return json({ error: "This photo is private" }, 401);
       const { value, metadata } = await env.PHOTOS.getWithMetadata(key, { type: "arrayBuffer" });
       if (!value) return json({ error: "Not found" }, 404);
       return new Response(req.method === "HEAD" ? null : value, {
-        headers: { ...CORS, "Content-Type": (metadata && metadata.type) || "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" },
+        headers: { ...CORS, "Content-Type": (metadata && metadata.type) || "image/jpeg", "Cache-Control": "private, max-age=31536000, immutable" },
       });
     }
 
