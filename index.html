@@ -289,7 +289,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent);font-weight:600}
 <body>
 <div class="wrap" id="app">
   <header>
-    <h1><span class="stripe" aria-hidden="true"></span>Garage Stock<small>Saved on this device</small></h1>
+    <h1><span class="stripe" aria-hidden="true"></span>Garage Stock<small id="subtitle">Saved on this device</small></h1>
     <button class="iconbtn" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </header>
 
@@ -454,16 +454,39 @@ const LS = "garagestock.v1", CFG_KEY = "garagestock.cfg";
 const S = { items:{}, locs:{}, extras:{}, seq:{ it:0, loc:0 }, tab:"garage", q:"", dept:"All", cat:"All", f:"all" };
 let CFG = {}; try { CFG = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch(e){}
 function saveCfg(){ try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch(e){} }
-function saveAll(){
-  try { localStorage.setItem(LS, JSON.stringify({ items:S.items, locs:S.locs, extras:S.extras, seq:S.seq })); }
+function writeAll(){
+  try { localStorage.setItem(LS, JSON.stringify({ items:S.items, locs:S.locs, extras:S.extras, seq:S.seq, deleted:S.deleted || {} })); }
   catch(e){ toast("Couldn't save. This browser's storage may be full or blocked."); }
 }
+function saveAll(){
+  const changed = stampChanges();
+  writeAll();
+  if (changed && typeof markDirty === "function") markDirty();
+}
 function loadAll(){
-  try {
-    const raw = localStorage.getItem(LS);
-    if (raw) { const d = JSON.parse(raw); Object.assign(S, { items:d.items || {}, locs:d.locs || {}, extras:d.extras || {}, seq:d.seq || { it:0, loc:0 } }); return; }
-  } catch(e){}
+  let raw = null;
+  try { raw = localStorage.getItem(LS); } catch(e){}
+  if (raw) {
+    try { const d = JSON.parse(raw); Object.assign(S, { items:d.items || {}, locs:d.locs || {}, extras:d.extras || {}, seq:d.seq || { it:0, loc:0 }, deleted:d.deleted || {} }); snapshot(); return; }
+    catch(e){ try { localStorage.setItem(LS + ".unreadable-" + Date.now(), raw); } catch(err){} }
+  }
   seedExamples();
+}
+/* What each record looked like at the last save, so saves can stamp edits and notice deletions however they happened. */
+const KINDS = ["items", "locs", "extras"];
+let SNAP = { items:{}, locs:{}, extras:{} };
+const bodyOf = r => { const { updated, ...rest } = r || {}; return JSON.stringify(rest); };
+function snapshot(){ SNAP = Object.fromEntries(KINDS.map(k => [k, Object.fromEntries(Object.entries(S[k] || {}).map(([id, r]) => [id, bodyOf(r)]))])); }
+function stampChanges(){
+  const now = Date.now(); S.deleted ||= {};
+  let changed = false;
+  for (const k of KINDS) {
+    const del = (S.deleted[k] ||= {});
+    for (const [id, r] of Object.entries(S[k] || {})) { if (SNAP[k][id] !== bodyOf(r)) { if (SNAP[k][id] !== undefined || !r.updated) r.updated = now; changed = true; } }
+    for (const id of Object.keys(SNAP[k])) if (!(S[k] || {})[id]) { del[id] = now; changed = true; }
+  }
+  snapshot();
+  return changed;
 }
 function nextCode(type){
   S.seq[type] = (S.seq[type] || 0) + 1;
@@ -1764,16 +1787,22 @@ function openSettings(){
       <p class="full hint" style="margin:0">With a key, Claude identifies tools from a photo of the tool, box or model plate and files them in the right category. The key is stored only in this browser and sent only to Anthropic. Usage is billed to your API account (console.anthropic.com).</p>
     </div>
     <div class="row end" style="margin-top:12px"><button class="btn" id="s-save">Save</button></div>
-    <h3>Online photo storage</h3>
-    <p class="hint" style="margin:0 0 10px">Photos go to your Cloudflare storage and get a web link, so they open on any device and don't fill up this phone.</p>
+    <h3>Online storage &amp; sync</h3>
+    <p class="hint" style="margin:0 0 10px">Connect your Cloudflare storage and your garage and photos live online: open the app on any phone, tablet or computer and you see the same items and places, kept in step automatically. Use the same storage link and key as Home Stock.</p>
     <div class="form">
       <label class="full">Storage link<input type="url" id="s-curl" value="${esc(CFG.cloudUrl || "")}" placeholder="https://garage-photos.yourname.workers.dev"></label>
       <label class="full">Upload key<input type="password" id="s-ckey" autocomplete="off" value="${esc(CFG.cloudKey || "")}" placeholder="gs_…"></label>
     </div>
     <div class="row" style="margin-top:10px"><button class="btn ghost" id="s-ctest">Test connection</button><button class="btn ghost" id="s-cup" hidden>Upload photos on this phone</button></div>
     <p class="hint" id="s-cmsg" style="margin:8px 0 0"></p>
+    <div id="s-syncbox" ${cloudOn() ? "" : "hidden"} style="margin-top:12px">
+      <label style="display:flex;gap:10px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="s-sync" ${CFG.sync !== false ? "checked" : ""}> Keep my garage in sync across devices</label>
+      <p class="hint" id="s-syncstate" style="margin:6px 0 10px"></p>
+      <div class="row"><button class="btn" id="s-link">Copy link for another device</button><button class="btn ghost" id="s-syncnow">Sync now</button></div>
+      <p class="hint" style="margin:8px 0 0">Open the copied link on the other device once; it connects automatically and remembers. Anyone with that link can see and change your garage, so only share it with your household.</p>
+    </div>
     <h3>Backup</h3>
-    <p class="hint" style="margin:0 0 10px">Your item list is saved in this browser. Export a backup to keep it safe or move it to another phone. Online photos stay linked in the backup.</p>
+    <p class="hint" style="margin:0 0 10px">Export a backup file to keep a copy of everything, including photos kept on this phone.</p>
     <div class="row"><button class="btn ghost" id="s-export">Export backup</button><label class="btn ghost" for="s-import">Import backup</label><input type="file" id="s-import" accept="application/json,.json" hidden></div>
     <h3>Value</h3>
     <p class="hint" id="s-value" style="margin:0"></p>
@@ -1786,6 +1815,15 @@ function openSettings(){
   const localCount = () => Object.values(S.items).filter(i => i.hasPhoto && !i.photoUrl).length;
   const showUp = () => { const n = localCount(); $("#s-cup").hidden = !(cloudOn() && n); $("#s-cup").textContent = `Upload ${n} photo${n === 1 ? "" : "s"} on this phone`; };
   showUp();
+  const syncState = () => { if ($("#s-syncstate")) $("#s-syncstate").textContent = !syncOn() ? "Sync is off. This device keeps its own garage." : `Status: ${$("#subtitle").textContent}.`; };
+  syncState();
+  $("#s-sync").onchange = e => { CFG.sync = e.target.checked; saveCfg(); if (CFG.sync) { SYNC.dirty = true; syncNow().then(syncState); } else { setSyncStatus("off"); syncState(); } };
+  $("#s-syncnow").onclick = async () => { $("#s-syncstate").textContent = "Syncing…"; await syncNow(); syncState(); };
+  $("#s-link").onclick = async () => {
+    const link = connectLink();
+    try { await navigator.clipboard.writeText(link); toast("Link copied. Open it on your other device."); }
+    catch(e){ $("#s-syncstate").innerHTML = `Copy this link: <input type="text" readonly value="${esc(link)}" style="width:100%;margin-top:6px" onfocus="this.select()">`; }
+  };
   $("#s-ctest").onclick = async () => {
     const url = $("#s-curl").value.trim().replace(/\/+$/, ""), key = $("#s-ckey").value.trim();
     if (!url) return $("#s-cmsg").textContent = "Paste the storage link from Cloudflare first.";
@@ -1795,8 +1833,11 @@ function openSettings(){
       const j = await r.json();
       if (!j.ok) throw 0;
       if (!j.auth) { $("#s-cmsg").textContent = "Connected, but the upload key doesn't match the UPLOAD_KEY secret in Cloudflare."; return; }
-      CFG.cloudUrl = url; CFG.cloudKey = key; saveCfg(); showUp();
-      $("#s-cmsg").textContent = "Connected. New photos will be stored online.";
+      CFG.cloudUrl = url; CFG.cloudKey = key; if (CFG.sync === undefined) CFG.sync = true; saveCfg(); showUp();
+      $("#s-syncbox").hidden = false;
+      $("#s-cmsg").textContent = j.data ? "Connected. Your garage and photos are stored online." : "Connected for photos. To sync your garage, paste the updated worker code into Cloudflare.";
+      SYNC.everSynced = false; saveSyncMeta();
+      await syncNow(); syncState(); await uploadPhotosQuietly(); showUp();
     } catch(e){ $("#s-cmsg").textContent = "Couldn't reach photo storage at that link. Check the link, and that the Worker has the PHOTOS storage binding."; }
   };
   $("#s-cup").onclick = async () => {
@@ -1809,7 +1850,7 @@ function openSettings(){
     CFG.cloudUrl = $("#s-curl").value.trim().replace(/\/+$/, ""); CFG.cloudKey = $("#s-ckey").value.trim();
     CFG.platforms = $("#s-plat").value.split(",").map(s => s.trim()).filter(Boolean);
     CFG.apiKey = $("#s-key").value.trim(); CFG.model = $("#s-model").value; saveCfg(); closeSheet();
-    toast(CFG.apiKey ? "Saved. Photo identification is on" : "Saved");
+    toast(CFG.apiKey ? "Saved. Photo identification is on" : "Saved"); setTimeout(syncNow, 100);
   };
   $("#s-export").onclick = async () => {
     const data = { app:"garage-stock", version:1, exported:new Date().toISOString(), items:S.items, locs:S.locs, extras:S.extras, seq:S.seq, photos: await photoAll() };
@@ -1823,6 +1864,7 @@ function openSettings(){
       const d = JSON.parse(await f.text());
       if (d.app !== "garage-stock" || !d.items) throw 0;
       Object.assign(S, { items:d.items, locs:d.locs || {}, extras:d.extras || {}, seq:d.seq || { it:0, loc:0 } });
+      const now = Date.now(); for (const k of KINDS) Object.values(S[k]).forEach(r => r.updated = now); SNAP = { items:{}, locs:{}, extras:{} };
       for (const [id, v] of Object.entries(d.photos || {})) await photoPut(id, v);
       saveAll(); renderAll(); closeSheet(); toast("Imported " + Object.keys(S.items).length + " items");
     } catch(err){ toast("That file isn't a Garage Stock backup."); }
@@ -1830,9 +1872,100 @@ function openSettings(){
 }
 $("#settingsBtn").onclick = openSettings;
 
+/* ---------- sync across devices (your Cloudflare storage) ----------
+   The garage lives online; every device keeps a copy so it opens instantly and works offline.
+   Changes merge record by record: the latest edit of an item, place or list line wins, and deletions carry over. */
+const SYNC_NAME = "garage", SYNC_META = "garagestock.sync";
+const SYNC = { version: 0, dirty: false, busy: false, timer: null, again: false, everSynced: false };
+try { Object.assign(SYNC, JSON.parse(localStorage.getItem(SYNC_META) || "{}")); SYNC.busy = false; SYNC.timer = null; } catch(e){}
+const saveSyncMeta = () => { try { localStorage.setItem(SYNC_META, JSON.stringify({ version: SYNC.version, dirty: SYNC.dirty, everSynced: SYNC.everSynced })); } catch(e){} };
+const syncOn = () => cloudOn() && CFG.sync !== false;
+function setSyncStatus(st){
+  $("#subtitle").textContent = { off: "Saved on this device", syncing: "Syncing…", ok: "Synced across your devices", offline: "Offline · changes will sync", old: "Update the Cloudflare worker to sync", key: "Sync key rejected · check Settings" }[st] || "";
+}
+function markDirty(){
+  if (!syncOn()) return;
+  SYNC.dirty = true; saveSyncMeta();
+  clearTimeout(SYNC.timer); SYNC.timer = setTimeout(syncNow, 2000);
+}
+async function syncReq(method, body){
+  let r;
+  try { r = await fetch(`${cloudBase()}/data/${SYNC_NAME}`, { method, cache: "no-store", headers: { "Authorization": "Bearer " + CFG.cloudKey, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }); }
+  catch(e){ throw Object.assign(new Error("offline"), { code: "offline" }); }
+  if (r.status === 404) throw Object.assign(new Error("old worker"), { code: "old" });
+  if (r.status === 401) throw Object.assign(new Error("key"), { code: "key" });
+  if (r.status !== 200 && r.status !== 409) throw Object.assign(new Error("http " + r.status), { code: "offline" });
+  return { status: r.status, body: await r.json() };
+}
+const canon = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
+function mergeDocs(a, b){
+  const del = {};
+  for (const k of KINDS) { del[k] = {}; for (const src of [a, b]) for (const [id, ts] of Object.entries(((src.deleted || {})[k]) || {})) del[k][id] = Math.max(del[k][id] || 0, ts); }
+  const cutoff = Date.now() - 90 * 864e5;
+  for (const k of KINDS) for (const [id, ts] of Object.entries(del[k])) if (ts < cutoff) delete del[k][id];
+  const out = { deleted: del, seq: { it: Math.max((a.seq || {}).it || 0, (b.seq || {}).it || 0), loc: Math.max((a.seq || {}).loc || 0, (b.seq || {}).loc || 0) } };
+  for (const k of KINDS) {
+    out[k] = {};
+    const A = a[k] || {}, B = b[k] || {};
+    for (const id of new Set([...Object.keys(A), ...Object.keys(B)])) {
+      const x = A[id], y = B[id], pick = !x ? y : !y ? x : ((y.updated || 0) > (x.updated || 0) ? y : x);
+      if (del[k][id] && del[k][id] >= (pick.updated || 0)) continue;
+      out[k][id] = pick;
+    }
+  }
+  return out;
+}
+const docOf = () => ({ items: S.items, locs: S.locs, extras: S.extras, seq: S.seq, deleted: S.deleted || {} });
+function applyDoc(d){
+  Object.assign(S, { items: d.items || {}, locs: d.locs || {}, extras: d.extras || {}, seq: d.seq || { it:0, loc:0 }, deleted: d.deleted || {} });
+  snapshot(); writeAll(); renderAll();
+}
+const same = (m, r) => KINDS.every(k => canon(m[k]) === canon(r[k]) && canon(m.deleted[k]) === canon((r.deleted || {})[k])) && canon(m.seq) === canon(r.seq);
+async function syncNow(){
+  if (!syncOn()) return setSyncStatus("off");
+  if (SYNC.busy) { SYNC.again = true; return; }
+  SYNC.busy = true; clearTimeout(SYNC.timer); setSyncStatus("syncing");
+  stampChanges();
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { body: remote } = await syncReq("GET");
+      let local = docOf();
+      /* A device joining an existing garage drops its sample items and places instead of adding them for everyone. */
+      if (!SYNC.everSynced && remote.doc) local = { ...local, items: Object.fromEntries(Object.entries(local.items).filter(([, i]) => !i.example)), locs: Object.fromEntries(Object.entries(local.locs).filter(([, l]) => !l.example)) };
+      const merged = remote.doc ? mergeDocs(local, remote.doc) : local;
+      applyDoc(merged);
+      SYNC.version = remote.version; SYNC.everSynced = true;
+      if (remote.doc && same(merged, remote.doc)) { SYNC.dirty = false; break; }
+      const put = await syncReq("PUT", { baseVersion: remote.version, doc: merged });
+      if (put.status === 200) { SYNC.version = put.body.version; SYNC.dirty = false; break; }
+    }
+    saveSyncMeta(); setSyncStatus(SYNC.dirty ? "offline" : "ok");
+  } catch(e){ setSyncStatus(e.code || "offline"); }
+  SYNC.busy = false;
+  if (SYNC.again) { SYNC.again = false; syncNow(); }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNow(); });
+window.addEventListener("online", () => syncNow());
+setInterval(() => { if (!document.hidden) syncNow(); }, 30000);
+const connectLink = () => `${location.origin}${location.pathname}#connect=${btoa(JSON.stringify({ u: cloudBase(), k: CFG.cloudKey }))}`;
+function readConnectLink(){
+  const m = location.hash.match(/^#connect=([A-Za-z0-9+/=_-]+)/); if (!m) return false;
+  try { const c = JSON.parse(atob(m[1])); if (c.u && c.k) { CFG.cloudUrl = c.u; CFG.cloudKey = c.k; CFG.sync = true; saveCfg(); SYNC.everSynced = false; SYNC.version = 0; saveSyncMeta(); } } catch(e){}
+  history.replaceState(null, "", location.pathname + location.search);
+  return true;
+}
+/* Photos taken before connecting move online automatically, so other devices can see them. */
+async function uploadPhotosQuietly(){
+  if (!cloudOn() || !Object.values(S.items).some(i => i.hasPhoto && !i.photoUrl)) return;
+  try { const r = await uploadLocalPhotos(); if (r.done) toast(`${r.done} photo${r.done === 1 ? "" : "s"} moved online`); } catch(e){}
+}
+
 /* ---------- toast & boot ---------- */
 let tt; function toast(m){ const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 2800); }
+const joinedByLink = readConnectLink();
 loadAll(); renderAll();
+setSyncStatus(syncOn() ? "syncing" : "off");
+setTimeout(async () => { await syncNow(); if (joinedByLink && SYNC.everSynced) toast("Connected. This device now shows your shared garage."); uploadPhotosQuietly(); }, 200);
 const hashTab = location.hash.slice(1);
 if (["scan","places","out","list","map"].includes(hashTab)) showTab(hashTab);
 </script>

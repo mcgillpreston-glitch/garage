@@ -27,7 +27,7 @@ Live: https://mcgillpreston-glitch.github.io/garage/
 
 Photo links are public to anyone who has the exact link; uploading and deleting need the key.
 
-The item list is stored on each device (localStorage). Photos are stored online once storage is connected, otherwise on the device. Use Export/Import to move it between phones.
+Once online storage is connected, the garage (items, places, list) syncs across every device through the same Worker (`/data/garage`), merging per record. Before that, everything is stored in the browser it was entered in. Settings → Copy link for another device connects a new phone or computer in one tap.
 
 `HANDOVER.md` is the original build brief.
 
