@@ -9,13 +9,16 @@
 // Synced app data (needs the key)
 //   GET    /data/<name>   -> {version, updatedAt, doc}
 //   PUT    /data/<name>   -> body {baseVersion, doc}; 409 with the current copy if someone saved first
+//   Optional secret ADMIN_PASSWORD: when set, only requests carrying it in the X-Admin-Key header
+//   can change the official Home Stock list (/data/home). Everyone else can still add to the review
+//   queue (/data/home-pending).
 // Other
 //   GET    /ping          -> {"ok":true,"auth":true|false,"data":true}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Admin-Key",
   "Access-Control-Max-Age": "86400",
 };
 const KEY_RE = /^[A-Za-z0-9_-]{1,120}$/;
@@ -23,6 +26,7 @@ const NAME_RE = /^[a-z0-9_-]{1,40}$/;
 const TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_DOC = 20 * 1024 * 1024;
+const ADMIN_ONLY = new Set(["home"]);
 
 const json = (body, status = 200, extra = {}) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "no-store", ...extra } });
@@ -51,6 +55,7 @@ export default {
       const current = (await env.PHOTOS.get(kvKey, { type: "json" })) || { version: 0, updatedAt: 0, doc: null };
       if (req.method === "GET") return json(current);
       if (req.method === "PUT") {
+        if (ADMIN_ONLY.has(name) && env.ADMIN_PASSWORD && (req.headers.get("X-Admin-Key") || "") !== env.ADMIN_PASSWORD) return json({ error: "Only the admin can change the official list" }, 403);
         const text = await req.text();
         if (text.length > MAX_DOC) return json({ error: "Data is too large" }, 413);
         let body; try { body = JSON.parse(text); } catch (e) { return json({ error: "Send JSON" }, 400); }
